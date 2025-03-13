@@ -215,7 +215,9 @@ const transporter = nodemailer.createTransport({
 
   app.post("/send-otp", async (req, res) => {
       const { email } = req.body;
+      console.log( email,"emial")
       const otp = Math.floor(1000 + Math.random() * 9000).toString();
+      console.log(otp , "oyp")
       const otpExpiration = Date.now() + 5 * 60 * 1000; // OTP expires in 5 minutes
   
       const mailOptions = {
@@ -227,7 +229,8 @@ const transporter = nodemailer.createTransport({
   
       try {
           // Send OTP via email
-          await transporter.sendMail(mailOptions);
+  const rt =      await transporter.sendMail(mailOptions);
+  console.log(rt , "rt")
   
           // Store OTP in PhoneNumber collection
           await PhoneNumber.findOneAndUpdate(
