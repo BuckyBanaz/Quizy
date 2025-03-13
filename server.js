@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const {ensureAuthenticated} = require('./Middelware/authenticateMiddleware.js')
 const authRoute = require("./companyRoutes/authRoutes.js");
 const companyRoutes = require("./companyRoutes/companyRoutes.js");
+require('dotenv').config();
 const dotenv = require("dotenv");
 require("./configfile/config.js");
 const { getUserById,
@@ -201,17 +202,24 @@ app.use(cookieParser());
 //     }
 // });
 
-
-
-
 const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, 
     auth: {
-      user: process.env.EMAIL, 
-      pass: process.env.PASSWORD, 
+      user: process.env.EMAIL,
+      pass: process.env.PASSWORD,
     },
   });
-
+  transporter.verify((error, success) => {
+    if (error) {
+      console.log("SMTP Error:", error);
+    } else {
+      console.log("SMTP Connection Successful!");
+    }
+  });
+  
+  
 
   app.post("/send-otp", async (req, res) => {
       const { email } = req.body;
