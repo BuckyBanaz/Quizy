@@ -202,133 +202,129 @@ app.use(cookieParser());
 //     }
 // });
 
+
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true, 
+    service: "gmail",
     auth: {
-      user: process.env.EMAIL,
-      pass: process.env.PASSWORD,
+      user: "goquizzytechnology@gmail.com",
+      pass: "nkez hine jrsj gtsh", 
     },
   });
-  transporter.verify((error, success) => {
-    if (error) {
-      console.log("SMTP Error:", error);
-    } else {
-      console.log("SMTP Connection Successful!");
-    }
-  });
-  
-  
+
 
   app.post("/send-otp", async (req, res) => {
+    try {
       const { email } = req.body;
-      console.log( email,"emial")
+      if (!email) {
+        return res.status(400).json({ success: false, message: "Email is required" });
+      }
+  
+      console.log(email, "email received");
+  
       const otp = Math.floor(1000 + Math.random() * 9000).toString();
-      console.log(otp , "oyp")
+      console.log(otp, "Generated OTP");
+  
       const otpExpiration = Date.now() + 5 * 60 * 1000; // OTP expires in 5 minutes
   
       const mailOptions = {
-          from: process.env.GMAIL_USER,
-          to: email,
-          subject: "Your OTP Code",
-          text: `Your OTP code is: ${otp}`,
+        from: process.env.GMAIL_USER, // Use env variable
+        to: email,
+        subject: "Your OTP Code",
+        text: `Your OTP code is: ${otp}`,
       };
   
-      try {
-          // Send OTP via email
-  const rt =      await transporter.sendMail(mailOptions);
-  console.log(rt , "rt")
+      // Send OTP via email
+      await transporter.sendMail(mailOptions);
+      console.log("OTP sent successfully");
   
-          // Store OTP in PhoneNumber collection
-          await PhoneNumber.findOneAndUpdate(
-              { email }, 
-              { email, otp, otpExpiration }, 
-              { upsert: true, new: true } // Create if not exists
-          );
+      // Store OTP in database
+      await PhoneNumber.findOneAndUpdate(
+        { email },
+        { email, otp, otpExpiration },
+        { upsert: true, new: true }
+      );
   
-          res.json({ success: true, message: "OTP sent successfully", otp });
-      } catch (error) {
-          console.error("Error sending OTP:", error);
-          res.status(500).json({ success: false, message: "Failed to send OTP" });
-      }
+      res.json({ success: true, message: "OTP sent successfully", otp });
+    } catch (error) {
+      console.error("Error sending OTP:", error);
+      res.status(500).json({ success: false, message: "Failed to send OTP" });
+    }
   });
   
 
   
   // Verify OTP
-
   app.post("/verify-otp", async (req, res) => {
+    try {
       const { email, otp } = req.body;
-  
-      try {
-          const emailData = await PhoneNumber.findOne({ email });
-  
-          if (emailData && emailData.otp === otp && emailData.otpExpiration > Date.now()) {
-              const token = jwt.sign({ email }, secretKey, { expiresIn: "24h" });
-  
-              const userData = await CombineDetails.findOne({
-                  $or: [
-                      { "formDetails.email": email },
-                      { "studentDetails.email": email },
-                  ],
-              });
-  
-              const user = userData ? {
-                  _id: userData._id || null,
-                  fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
-                  address: userData.formDetails?.address || userData.studentDetails?.address || null,
-                  email: email,
-                  city: userData.formDetails?.city || userData.studentDetails?.city || null,
-                  role: userData.formDetails?.role || userData.studentDetails?.role || null,
-                  state: userData.formDetails?.state || userData.studentDetails?.state || null,
-                  pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
-                  phoneNumber: userData.formDetails?.phoneNumber || userData.studentDetails?.phoneNumber || null,
-                  dob: userData.formDetails?.dob || null,
-                  // Additional fields from studentDetails
-                  schoolName: userData.studentDetails?.schoolName || null,
-                  schoolAddress: userData.studentDetails?.schoolAddress || null,
-                  selectEducation: userData.studentDetails?.selectEducation || null,
-                  boardOption: userData.studentDetails?.boardOption || null,
-                  classvalue: userData.studentDetails?.classvalue || null,
-                  mediumName: userData.studentDetails?.mediumName || null,
-                  aadharcard: userData.studentDetails?.aadharcard || null,
-              } : {
-                  _id: null,
-                  fullname: null,
-                  address: null,
-                  email: email,
-                  city: null,
-                  role: null,
-                  state: null,
-                  pincode: null,
-                  phoneNumber: null,
-                  dob: null,
-                  schoolName: null,
-                  schoolAddress: null,
-                  selectEducation: null,
-                  boardOption: null,
-                  classvalue: null,
-                  mediumName: null,
-                  aadharcard: null,
-              };
-  
-              res.json({
-                  success: true,
-                  message: "OTP verified successfully",
-                  user: user,
-                  token: token,
-              });
-          } else {
-              res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
-          }
-      } catch (err) {
-          console.error("Error verifying OTP:", err);
-          res.status(500).json({ success: false, message: "Failed to verify OTP" });
+      if (!email || !otp) {
+        return res.status(400).json({ success: false, message: "Email and OTP are required" });
       }
+  
+      const emailData = await PhoneNumber.findOne({ email });
+  
+      if (!emailData || emailData.otp !== otp || emailData.otpExpiration < Date.now()) {
+        return res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
+      }
+  
+      const token = jwt.sign({ email }, secretKey, { expiresIn: "24h" });
+  
+      const userData = await CombineDetails.findOne({
+        $or: [{ "formDetails.email": email }, { "studentDetails.email": email }],
+      });
+  
+      const user = userData
+        ? {
+            _id: userData._id || null,
+            fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
+            address: userData.formDetails?.address || userData.studentDetails?.address || null,
+            email,
+            city: userData.formDetails?.city || userData.studentDetails?.city || null,
+            role: userData.formDetails?.role || userData.studentDetails?.role || null,
+            state: userData.formDetails?.state || userData.studentDetails?.state || null,
+            pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
+            phoneNumber: userData.formDetails?.phoneNumber || userData.studentDetails?.phoneNumber || null,
+            dob: userData.formDetails?.dob || null,
+            schoolName: userData.studentDetails?.schoolName || null,
+            schoolAddress: userData.studentDetails?.schoolAddress || null,
+            selectEducation: userData.studentDetails?.selectEducation || null,
+            boardOption: userData.studentDetails?.boardOption || null,
+            classvalue: userData.studentDetails?.classvalue || null,
+            mediumName: userData.studentDetails?.mediumName || null,
+            aadharcard: userData.studentDetails?.aadharcard || null,
+          }
+        : {
+            _id: null,
+            fullname: null,
+            address: null,
+            email,
+            city: null,
+            role: null,
+            state: null,
+            pincode: null,
+            phoneNumber: null,
+            dob: null,
+            schoolName: null,
+            schoolAddress: null,
+            selectEducation: null,
+            boardOption: null,
+            classvalue: null,
+            mediumName: null,
+            aadharcard: null,
+          };
+  
+      res.json({
+        success: true,
+        message: "OTP verified successfully",
+        user,
+        token,
+      });
+    } catch (err) {
+      console.error("Error verifying OTP:", err);
+      res.status(500).json({ success: false, message: "Failed to verify OTP" });
+    }
   });
   
-
 
 
 
