@@ -1,10 +1,10 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const axios = require("axios");
-const cors = require ("cors");
+const cors = require("cors");
 const nodemailer = require("nodemailer");
 const cookieParser = require('cookie-parser');
-const {ensureAuthenticated} = require('./Middelware/authenticateMiddleware.js')
+const { ensureAuthenticated } = require('./Middelware/authenticateMiddleware.js')
 const authRoute = require("./companyRoutes/authRoutes.js");
 const companyRoutes = require("./companyRoutes/companyRoutes.js");
 require('dotenv').config();
@@ -34,10 +34,11 @@ const passworddata = require("./Model/passwordData.js");
 const contestdetails = require("./Model/contest.js");
 const Question = require("./Model/Question.js");
 const CombineDetails = require("./Model/OtherData.js");
+const  Referral = require("./Model/ReefrelCode.js")
 const Wallet = require("./Model/Wallet.js");
 const leaderboarddetail = require("./Model/LeadBoard.js");
-const Monthlyleaderboard = require ("./Model/MonthlyLeadboard")
-const Megaleaderboard = require ("./Model/MegaLeaderBoard.js")
+const Monthlyleaderboard = require("./Model/MonthlyLeadboard")
+const Megaleaderboard = require("./Model/MegaLeaderBoard.js")
 const Weeklyleaderboard = require("./Model/Weekly_leaderboard.js")
 const gkQuestion = require("./Model/OtherQuestion.js");
 const validateStudentData = require("./Middelware/MiddelWare.js")
@@ -45,12 +46,12 @@ const monthContest = require("./Model/MonthlyContest.js")
 const practiceContest = require("./Model/Practice_Contest.js")
 const studentContestQuestion = require("./Model/student_Question.js")
 const competitiveContest = require("./Model/competitive.js")
-const SchoolContest = require ("./Model/School.js")
+const SchoolContest = require("./Model/School.js")
 const weeklycontest = require("./Model/Weekly.js")
-const Megacontest = require ("./Model/Mega.js")
-const practiceQuestion = require ("./Model/PracticeQuestion.js")
+const Megacontest = require("./Model/Mega.js")
+const practiceQuestion = require("./Model/PracticeQuestion.js")
 const practice_Answer = require('./Model/PracticeAnswer.js');
-const KeyContest = require ("./Model/KeySchema.js")
+const KeyContest = require("./Model/KeySchema.js")
 const Schoolform = require("./Model/SchoolForm.js")
 const StudentSite = require("./Model/StudentSite.js")
 const AppDetails = require("./Model/AppDetails.js");
@@ -61,6 +62,7 @@ const Razorpay = require("razorpay");
 const School = require("./Model/School.js");
 const TeacherContest = require("./Model/TeacherContest.js");
 const TeacherQuestion = require("./Model/TeacherQuestion.js");
+const crypto = require("crypto")
 
 
 const app = express();
@@ -90,7 +92,7 @@ app.use(cookieParser());
 
 
 // Login needed Api Start
-//Genrate-Otp Api
+// Genrate-Otp Api
 // app.post("/send-otp", async (req, res) => {
 //     const { phoneNumber } = req.body;
 //     const phoneRegex = /^\d{10}$/;
@@ -135,7 +137,7 @@ app.use(cookieParser());
 //     }
 // });
 
-//verify-Otp
+// // verify-Otp
 // app.post("/verify-otp", async (req, res) => {
 //     const { phoneNumber, otp } = req.body;
 //     try {
@@ -206,79 +208,154 @@ app.use(cookieParser());
 const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: "goquizzytechnology@gmail.com",
-      pass: "nkez hine jrsj gtsh", 
+        user: "goquizzytechnology@gmail.com",
+        pass: "nkez hine jrsj gtsh",
     },
-  });
+});
 
-
-  app.post("/send-otp", async (req, res) => {
+app.post("/send-otp", async (req, res) => {
     try {
-      const { email } = req.body;
-      if (!email) {
-        return res.status(400).json({ success: false, message: "Email is required" });
-      }
-  
-      console.log(email, "email received");
-  
-      const otp = Math.floor(1000 + Math.random() * 9000).toString();
-      console.log(otp, "Generated OTP");
-  
-      const otpExpiration = Date.now() + 5 * 60 * 1000; // OTP expires in 5 minutes
-  
-      const mailOptions = {
-        from: process.env.GMAIL_USER, // Use env variable
-        to: email,
-        subject: "Your OTP Code",
-        text: `Your OTP code is: ${otp}`,
-      };
-  
-      // Send OTP via email
-      await transporter.sendMail(mailOptions);
-      console.log("OTP sent successfully");
-  
-      // Store OTP in database
-      await PhoneNumber.findOneAndUpdate(
-        { email },
-        { email, otp, otpExpiration },
-        { upsert: true, new: true }
-      );
-  
-      res.json({ success: true, message: "OTP sent successfully", otp });
+        const { email, referralCode } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Email is required" });
+        }
+
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        const otpExpiration = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+
+        // If referralCode is provided, find the referrer
+        let referredBy = null;
+        if (referralCode) {
+            const referrer = await PhoneNumber.findOne({ referralCode });
+            if (referrer) {
+                referredBy = { userId: referrer._id, fullname: referrer.fullname };
+            }
+        }
+
+        await PhoneNumber.findOneAndUpdate(
+            { email },
+            { email, otp, otpExpiration, referredBy },
+            { upsert: true, new: true }
+        );
+
+        const mailOptions = {
+            from: process.env.GMAIL_USER,
+            to: email,
+            subject: "Your OTP Code",
+            text: `Your OTP code is: ${otp}`,
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.json({ success: true, message: "OTP sent successfully" });
     } catch (error) {
-      console.error("Error sending OTP:", error);
-      res.status(500).json({ success: false, message: "Failed to send OTP" });
+        console.error("Error sending OTP:", error);
+        res.status(500).json({ success: false, message: "Failed to send OTP" });
     }
-  });
-  
+});
 
-  
-  // Verify OTP
-  app.post("/verify-otp", async (req, res) => {
+
+
+
+app.get("/track-referral", async (req, res) => {
+    const {ref: referralCode, device_id: deviceId } = req.query;
+
+    if (!referralCode || !deviceId) {
+        return res.status(400).json({ message: "Missing referral code or device ID" });
+    }
+
     try {
-      const { email, otp } = req.body;
-      if (!email || !otp) {
-        return res.status(400).json({ success: false, message: "Email and OTP are required" });
-      }
-  
-      const emailData = await PhoneNumber.findOne({ email });
-  
-      if (!emailData || emailData.otp !== otp || emailData.otpExpiration < Date.now()) {
-        return res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
-      }
-  
-      const token = jwt.sign({ email }, secretKey, { expiresIn: "24h" });
-  
-      const userData = await CombineDetails.findOne({
-        $or: [{ "formDetails.email": email }, { "studentDetails.email": email }],
-      });
-  
-      const user = userData
-        ? {
+        await Referral.findOneAndUpdate(
+            { deviceId },
+            { referralCode },
+            { upsert: true, new: true }
+        );
+
+        res.json({ message: "Referral stored successfully" });
+    } catch (error) {
+        console.error("Error storing referral:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+});
+
+
+
+
+app.get("/get-referral", async (req, res) => {
+    const { device_id: deviceId } = req.query;
+
+    if (!deviceId) {
+        return res.status(400).json({ message: "Missing device ID" });
+    }
+
+    try {
+        const referral = await Referral.findOne({ deviceId });
+
+        if (!referral) {
+            return res.status(404).json({ message: "No referral found" });
+        }
+
+        res.json({ referralCode: referral.referralCode });
+    } catch (error) {
+        console.error("Error retrieving referral:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+});
+
+
+
+// Verify OTP
+
+app.post("/verify-otp", async (req, res) => {
+    const { email, otp } = req.body; // Now verifying by email instead of phoneNumber
+    try {
+        const emailData = await PhoneNumber.findOne({ email }); // Check OTP against email
+        if (!emailData || emailData.otp !== otp || emailData.otpExpiration <= Date.now()) {
+            return res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
+        }
+
+        const generateReferralCode = () => crypto.randomBytes(4).toString("hex").toUpperCase();
+
+
+        let userData = await CombineDetails.findOne({
+            $or: [
+                { "formDetails.email": email },
+                { "studentDetails.email": email },
+            ],
+        });
+
+        let referralCode = userData?.formDetails?.referralCode || userData?.studentDetails?.referralCode || generateReferralCode();
+
+        if (!userData) {
+
+            userData = new CombineDetails({
+                formDetails: {
+                    email,
+                    referralCode,
+                },
+                studentDetails: {}
+            });
+            await userData.save();
+        } else {
+
+            if (!userData.formDetails?.referralCode && !userData.studentDetails?.referralCode) {
+                if (!userData.formDetails) userData.formDetails = {};
+                userData.formDetails.referralCode = referralCode;
+                await userData.save();
+            }
+        }
+
+        // Generate JWT Token
+        const token = jwt.sign({ email }, secretKey, { expiresIn: "24h" });
+
+        // Prepare user response
+        // Prepare user response
+        const user = {
             _id: userData._id || null,
             fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
             address: userData.formDetails?.address || userData.studentDetails?.address || null,
-            email,
+            email: email, // Now email is primary key
             city: userData.formDetails?.city || userData.studentDetails?.city || null,
             role: userData.formDetails?.role || userData.studentDetails?.role || null,
             state: userData.formDetails?.state || userData.studentDetails?.state || null,
@@ -292,52 +369,69 @@ const transporter = nodemailer.createTransport({
             classvalue: userData.studentDetails?.classvalue || null,
             mediumName: userData.studentDetails?.mediumName || null,
             aadharcard: userData.studentDetails?.aadharcard || null,
-          }
-        : {
-            _id: null,
-            fullname: null,
-            address: null,
-            email,
-            city: null,
-            role: null,
-            state: null,
-            pincode: null,
-            phoneNumber: null,
-            dob: null,
-            schoolName: null,
-            schoolAddress: null,
-            selectEducation: null,
-            boardOption: null,
-            classvalue: null,
-            mediumName: null,
-            aadharcard: null,
-          };
-  
-      res.json({
-        success: true,
-        message: "OTP verified successfully",
-        user,
-        token,
-      });
-    } catch (err) {
-      console.error("Error verifying OTP:", err);
-      res.status(500).json({ success: false, message: "Failed to verify OTP" });
-    }
-  });
-  
+            referralCode: referralCode, // Show referral code
+            referredBy: {
+                userId: userData.formDetails?.referredBy?.userId || userData.studentDetails?.referredBy?.userId || null,
+                fullname: userData.formDetails?.referredBy?.fullname || userData.studentDetails?.referredBy?.fullname || null,
+            },
+        };
 
+        res.json({
+            success: true,
+            message: "OTP verified successfully",
+            user: user,
+            token: token,
+        });
+
+    } catch (err) {
+        console.error("Error verifying OTP:", err);
+        res.status(500).json({ success: false, message: "Failed to verify OTP" });
+    }
+});
+
+
+//   app.post("/check-referral", async (req, res) => {
+//     try {
+//         const { referralCode } = req.body;
+
+//         if (!referralCode) {
+//             return res.status(400).json({ success: false, message: "Referral code is required" });
+//         }
+
+//         const referrer = await PhoneNumber.findOne({ referralCode });
+
+//         if (!referrer) {
+//             return res.status(404).json({ success: false, message: "Invalid referral code" });
+//         }
+
+//         res.json({
+//             success: true,
+//             message: "Referral code verified",
+//             referredBy: {
+//                 userId: referrer._id,
+//                 fullname: referrer.fullname || "Unknown"
+//             }
+//         });
+
+//     } catch (err) {
+//         console.error("Error checking referral:", err);
+//         res.status(500).json({ success: false, message: "Failed to check referral" });
+//     }
+// });
 
 
 app.post("/verify-refferralCode", async (req, res) => {
     try {
         let referralBonusForUser = 10;
-        let referralBonusForReferrer = 10; 
+        let referralBonusForReferrer = 10;
 
-        const { referredBy, phoneNumber } = req.body;
-        const phoneNumberData = await PhoneNumber.findOne({ phoneNumber });
-        if (!phoneNumberData) {
-            return res.status(202).json({ success: false, message: "Your are not verified" });
+        const { referredBy, email } = req.body;
+        const userData = await PhoneNumber.findOne({ email });
+
+        if (!userData) {
+            return res.status(202).json({ success: false, message: "You are not verified" });
         }
+
         if (referredBy && referredBy.trim() !== "") {
             const upperCaseReferredBy = referredBy.toUpperCase();
             const referralRecord = await CombineDetails.findOne({
@@ -346,39 +440,54 @@ app.post("/verify-refferralCode", async (req, res) => {
                     { "studentDetails.referralCode": upperCaseReferredBy },
                 ],
             });
+
             if (!referralRecord) {
                 return res.status(202).json({ success: false, message: "Referral code not found" });
             }
+
             let referrerWallet = await Wallet.findOne({ combineId: referralRecord._id });
+
             if (!referrerWallet) {
-                referrerWallet = new Wallet({ combineId: referralRecord._id, referralBalance: referralBonusForReferrer });
+                referrerWallet = new Wallet({
+                    combineId: referralRecord._id,
+                    referralBalance: referralBonusForReferrer
+                });
             } else {
                 referrerWallet.referralBalance += referralBonusForReferrer;
             }
             await referrerWallet.save();
-            await logTransaction(referralRecord._id, referralBonusForReferrer, "credit", "Refferal bonus", "completed");
+            await logTransaction(referralRecord._id, referralBonusForReferrer, "credit", "Referral bonus", "completed");
 
             const referredByDetails = {
                 userId: referralRecord._id,
                 fullname: referralRecord.formDetails?.fullname || referralRecord.studentDetails?.fullname,
+                walletId: referrerWallet._id,
+                walletBalance: referrerWallet.referralBalance
             };
-            phoneNumberData.referredBy = referredByDetails;
-            await phoneNumberData.save();
 
-            res.status(200).json({success: true, message: "Referral code is Applied"});
+            userData.referredBy = referredByDetails;
+            await userData.save();
+
+            res.status(200).json({
+                success: true,
+                message: "Referral code is applied",
+                referredByDetails
+            });
+        } else {
+            res.status(400).json({ success: false, message: "Referral code is required" });
         }
+
     } catch (error) {
-        console.error("Error apply referral code:", error);
-        res.status(500).send({
-            error: "Apply referral code error occurred",
-        });
+        console.error("Error applying referral code:", error);
+        res.status(500).json({ error: "An error occurred while applying the referral code" });
     }
-})
+});
+
 
 app.get("/getReferralCode", async (req, res) => {
     try {
         const { userId } = req.query;
-        if (!userId) 
+        if (!userId)
             return res.status(400).json({ message: "userId is required" });
         const userRecord = await CombineDetails.findOne(
             { _id: userId },
@@ -558,7 +667,7 @@ app.post("/other/add", authhentication, async (req, res) => {
                 ],
             });
             if (!existingReferral) {
-                isUnique = true; 
+                isUnique = true;
             }
         }
         req.body.referralCode = referralCode;
@@ -569,14 +678,14 @@ app.post("/other/add", authhentication, async (req, res) => {
                 req.body.referredBy = phoneNumberData.referredBy;
             }
         }
-        
+
         const data = new CombineDetails({ formDetails: req.body });
         const result = await data.save();
         let wallet = await Wallet.findOne({ combineId: result._id });
         if (!wallet) {
-            wallet = new Wallet({ combineId: result._id, balance: initialAmountForUser});
+            wallet = new Wallet({ combineId: result._id, balance: initialAmountForUser });
             await logTransaction(result._id, initialAmountForUser, "credit", "Reward Money", "completed");
-        } 
+        }
 
         // if (req.body.referredBy.userId != null && req.body.referredBy.userId != '' && req.body.referredBy.userId != undefined) {
         //     if (wallet) {
@@ -608,7 +717,7 @@ app.post("/student/add", authhentication, async (req, res) => {
         const studentData = req.body;
         validateStudentData(studentData);
         let initialAmountForUser = 10;
-        
+
         let referralCode;
         let isUnique = false;
 
@@ -626,7 +735,7 @@ app.post("/student/add", authhentication, async (req, res) => {
                 ],
             });
             if (!existingReferral) {
-                isUnique = true; 
+                isUnique = true;
             }
         }
         req.body.referralCode = referralCode;
@@ -643,7 +752,7 @@ app.post("/student/add", authhentication, async (req, res) => {
         console.log("Student-Result:", studentResult);
         let wallet = await Wallet.findOne({ combineId: studentResult._id });
         if (!wallet) {
-            wallet = new Wallet({ combineId: studentResult._id, balance: initialAmountForUser});
+            wallet = new Wallet({ combineId: studentResult._id, balance: initialAmountForUser });
             await logTransaction(studentResult._id, initialAmountForUser, "credit", "Reward Money", "completed");
         }
 
@@ -653,7 +762,7 @@ app.post("/student/add", authhentication, async (req, res) => {
         //         await logTransaction(studentResult._id, referralBonusForUser, "credit", "Referral Bonus", "completed");
         //     }
         // }
-        
+
         await wallet.save();
         console.log("Saved Wallet:", wallet);
         res.send({
@@ -668,7 +777,7 @@ app.post("/student/add", authhentication, async (req, res) => {
 
 // Form Student or other End
 //create contest 
-app.post("/create-contest_new",  async (req, res) => {
+app.post("/create-contest_new", async (req, res) => {
     try {
         const contests = await createMultipleContestss();
         res.json({
@@ -718,7 +827,7 @@ app.post("/join-game", authhentication, async (req, res) => {
 
         contest.combineId.push({ id: combineId, fullname });
         await contest.save();
-        
+
         // if (contest.combineId.length >= contest.maxParticipants) {
         //     contest.isFull = true;
         //     await Promise.all([
@@ -862,7 +971,7 @@ app.post("/other/question", authhentication, async (req, res) => {
         if (!othervalues) {
             return res.status(400).send({ message: "Data is not available" });
         }
-   
+
         const count = await gkQuestion.countDocuments();
         if (count === 0) {
             return res.status(404).send({
@@ -910,7 +1019,7 @@ app.get("/get/score", authhentication, async (req, res) => {
 });
 
 //Other Data Answer
-app.post("/other/answer", authhentication,  async (req, res) => {
+app.post("/other/answer", authhentication, async (req, res) => {
     const { combineId, contestId, gkquestionId, selectedOption, combineuser } = req.body;
     try {
         const question = await gkQuestion.findById(gkquestionId);
@@ -1041,9 +1150,9 @@ app.get("/contestdata", authhentication, async (req, res) => {
 
 // other Student 11th & 12th Question 
 // Done
-app.post("/1-12_create-contest",authhentication, async (req, res) => {
+app.post("/1-12_create-contest", authhentication, async (req, res) => {
     try {
-        const contests = await  createStudentMultipleContests();
+        const contests = await createStudentMultipleContests();
         res.json({
             message: "Contests created successfully",
             contests,
@@ -1118,7 +1227,7 @@ app.post("/1-12_questions", authhentication, async (req, res) => {
         if (!othervalues) {
             return res.status(400).send({ message: "Data is not available" });
         }
-   
+
         const count = await gkQuestion.countDocuments();
         if (count === 0) {
             return res.status(404).send({
@@ -1208,7 +1317,7 @@ app.post("/1-12_answer", authhentication, async (req, res) => {
 //         }
 //         const isCorrect = question.correctAnswer === selectedOption;
 //         console.log(isCorrect, "isCorrect")
-        
+
 //         const combinedata = await CombineDetails.findById(combineId);
 //         if (!combinedata) {
 //             return res.status(404).json({ message: "User not found" });
@@ -1220,7 +1329,7 @@ app.post("/1-12_answer", authhentication, async (req, res) => {
 //             // Update user score
 //             combinedata.score === 0;
 //            const result =  combinedata.score += 1;
-           
+
 //             await combinedata.save();
 //             console.log(result, "result")
 
@@ -1257,58 +1366,58 @@ app.post("/1-12_answer", authhentication, async (req, res) => {
 
 app.post("/1-12_update-score", authhentication, async (req, res) => {
     const { combineId, tempScore, isValid, completionTime, combineuser } = req.body;
-  
+
     if (typeof tempScore !== "number" || typeof isValid !== "boolean") {
-      return res.status(400).json({ message: "Invalid input format." });
+        return res.status(400).json({ message: "Invalid input format." });
     }
-  
+
     try {
-      let scoreData = await Weeklyleaderboard.findOne({ combineId });
-      if (!scoreData) {
-        // Create a new document if it doesn't exist
-        scoreData = new Weeklyleaderboard({
-            combineId,
-            score: isValid ? tempScore : 0,
-            tempScore: null,
-            isValid,
-            combineuser: combineuser,
-            completionTime: isValid ? completionTime : null,
-        });
+        let scoreData = await Weeklyleaderboard.findOne({ combineId });
+        if (!scoreData) {
+            // Create a new document if it doesn't exist
+            scoreData = new Weeklyleaderboard({
+                combineId,
+                score: isValid ? tempScore : 0,
+                tempScore: null,
+                isValid,
+                combineuser: combineuser,
+                completionTime: isValid ? completionTime : null,
+            });
+
+            await scoreData.save();
+            return res.status(200).json({
+                message: isValid
+                    ? "Temp score successfully added to the real score."
+                    : "Temp score reset without affecting the real score.",
+                score: scoreData.score,
+                combineId,
+            });
+        }
+
+        if (isValid) {
+            scoreData.score = tempScore;
+            scoreData.completionTime = completionTime;
+        }
+
+        scoreData.tempScore = null;
+        scoreData.isValid = isValid;
 
         await scoreData.save();
+
         return res.status(200).json({
             message: isValid
-              ? "Temp score successfully added to the real score."
-              : "Temp score reset without affecting the real score.",
+                ? "Temp score successfully added to the real score."
+                : "Temp score reset without affecting the real score.",
             score: scoreData.score,
             combineId,
-          });
-      }
-  
-      if (isValid) {
-        scoreData.score = tempScore; 
-        scoreData.completionTime = completionTime;
-    }
-  
-      scoreData.tempScore = null; 
-      scoreData.isValid = isValid;
-  
-      await scoreData.save();
-  
-      return res.status(200).json({
-        message: isValid
-          ? "Temp score successfully added to the real score."
-          : "Temp score reset without affecting the real score.",
-        score: scoreData.score,
-        combineId,
-      });
+        });
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Internal server error." });
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error." });
     }
-  });
-  
-app.get("/1-12_get-contest", authhentication,   async (req, res) => {
+});
+
+app.get("/1-12_get-contest", authhentication, async (req, res) => {
     try {
         const contests = await studentContestQuestion.find();
         const contestsWithStatus = contests
@@ -1340,7 +1449,7 @@ app.get("/1-12_get-contest", authhentication,   async (req, res) => {
     }
 });
 
-app.get("/1-12_one_contest", authhentication,   async (req, res) => {
+app.get("/1-12_one_contest", authhentication, async (req, res) => {
     const { id } = req.query;
     try {
         let contests;
@@ -1378,7 +1487,7 @@ app.get("/1-12_one_contest", authhentication,   async (req, res) => {
     }
 });
 
-app.get("/1-12_get/score", authhentication,  async (req, res) => {
+app.get("/1-12_get/score", authhentication, async (req, res) => {
     const { contestId, combineId } = req.query;
     try {
         const combineDetail = await CombineDetails.findById(combineId);
@@ -1404,9 +1513,9 @@ app.get("/1-12_get/score", authhentication,  async (req, res) => {
     }
 });
 
-app.post("/1-12_system_compare",  authhentication,  async (req, res) => {
+app.post("/1-12_system_compare", authhentication, async (req, res) => {
     const { contestId, combineId1, combineId2 } = req.body;
-    const fixedWalletId = "66fcf223377b6df30f65389d";  
+    const fixedWalletId = "66fcf223377b6df30f65389d";
     try {
         const contest = await studentContestQuestion.findById(contestId);
         if (!contest) {
@@ -1423,7 +1532,7 @@ app.post("/1-12_system_compare",  authhentication,  async (req, res) => {
         else if (user1.score < user2.score) winner = user2;
         else return res.status(200).json({ message: "It's a tie!", user1, user2 });
         const winnerAmount = contest.winningAmount;
-        const systemCutAmount = Math.round(winnerAmount / 0.84 * 0.16);  
+        const systemCutAmount = Math.round(winnerAmount / 0.84 * 0.16);
         const winnerWallet = await getWalletBycombineId(winner.id);
         if (!winnerWallet) return res.status(404).json({ message: "Winner's wallet not found" });
         winnerWallet.balance += winnerAmount;
@@ -1452,7 +1561,7 @@ app.post("/1-12_system_compare",  authhentication,  async (req, res) => {
 
 //  competitive Part 
 // Done
-app.post("/competitive_create_contest", authhentication,  async (req, res) => {
+app.post("/competitive_create_contest", authhentication, async (req, res) => {
     try {
         const contests = await createMultipleCompetitiveContests();
         res.json({
@@ -1465,7 +1574,7 @@ app.post("/competitive_create_contest", authhentication,  async (req, res) => {
     }
 });
 
-app.post("/competitive_join-contest", authhentication,   async (req, res) => {
+app.post("/competitive_join-contest", authhentication, async (req, res) => {
     const { contestId, combineId, fullname } = req.body;
     console.log("10")
     try {
@@ -1589,7 +1698,7 @@ app.post("/competitive_answer", authhentication, async (req, res) => {
     }
 });
 
-app.get("/competitive_contest_show", authhentication, async (req, res) => { 
+app.get("/competitive_contest_show", authhentication, async (req, res) => {
     const { id } = req.query;
     try {
         let contests;
@@ -1608,7 +1717,7 @@ app.get("/competitive_contest_show", authhentication, async (req, res) => {
             return {
                 contestId: contest._id,
                 gameAmount: contest.amount,
-                winningAmount:contest.winningAmount,
+                winningAmount: contest.winningAmount,
                 isFull,
                 players: contest.combineId.map(player => ({
                     combineId: player.id,
@@ -1665,7 +1774,7 @@ app.get("/competitive_one_contest_show", authhentication, async (req, res) => {
     }
 });
 
-app.get("/competitive_get/score", authhentication,  async (req, res) => {
+app.get("/competitive_get/score", authhentication, async (req, res) => {
     const { contestId, combineId } = req.query;
     try {
         const combineDetail = await CombineDetails.findById(combineId);
@@ -1694,7 +1803,7 @@ app.get("/competitive_get/score", authhentication,  async (req, res) => {
 
 app.post("/competitive_system_compare", authhentication, async (req, res) => {
     const { contestId, combineId1, combineId2 } = req.body;
-    const fixedWalletId = "66fcf223377b6df30f65389d";  
+    const fixedWalletId = "66fcf223377b6df30f65389d";
     try {
         const contest = await competitiveContest.findById(contestId);
         if (!contest) {
@@ -1711,7 +1820,7 @@ app.post("/competitive_system_compare", authhentication, async (req, res) => {
         else if (user1.score < user2.score) winner = user2;
         else return res.status(200).json({ message: "It's a tie!", user1, user2 });
         const winnerAmount = contest.winningAmount;
-        const systemCutAmount = Math.round(winnerAmount / 0.84 * 0.16);  
+        const systemCutAmount = Math.round(winnerAmount / 0.84 * 0.16);
         const winnerWallet = await getWalletBycombineId(winner.id);
         if (!winnerWallet) return res.status(404).json({ message: "Winner's wallet not found" });
         winnerWallet.balance += winnerAmount;
@@ -1928,59 +2037,59 @@ app.get("/leaderboard", authhentication, async (req, res) => {
     }
 });
 
-app.post("/daily_update_score", authhentication,  async (req, res) => {
+app.post("/daily_update_score", authhentication, async (req, res) => {
     const { combineId, tempScore, isValid, completionTime, combineuser } = req.body;
-  
+
     if (typeof tempScore !== "number" || typeof isValid !== "boolean") {
-      return res.status(400).json({ message: "Invalid input format." });
+        return res.status(400).json({ message: "Invalid input format." });
     }
-  
+
     try {
-      let scoreData = await leaderboarddetail.findOne({ combineId });
-      if (!scoreData) {
-        // Create a new document if it doesn't exist
-        scoreData = new leaderboarddetail({
-            combineId,
-            score: isValid ? tempScore : 0,
-            tempScore: null,
-            isValid,
-            combineuser: combineuser,
-            completionTime: isValid ? completionTime : null,
-        });
+        let scoreData = await leaderboarddetail.findOne({ combineId });
+        if (!scoreData) {
+            // Create a new document if it doesn't exist
+            scoreData = new leaderboarddetail({
+                combineId,
+                score: isValid ? tempScore : 0,
+                tempScore: null,
+                isValid,
+                combineuser: combineuser,
+                completionTime: isValid ? completionTime : null,
+            });
+
+            await scoreData.save();
+            return res.status(200).json({
+                message: isValid
+                    ? "Temp score successfully added to the real score."
+                    : "Temp score reset without affecting the real score.",
+                score: scoreData.score,
+                combineId,
+            });
+        }
+
+        if (isValid) {
+            scoreData.score = tempScore;
+            scoreData.completionTime = completionTime;
+        }
+
+        scoreData.tempScore = null;
+        scoreData.isValid = isValid;
 
         await scoreData.save();
+
         return res.status(200).json({
             message: isValid
-              ? "Temp score successfully added to the real score."
-              : "Temp score reset without affecting the real score.",
+                ? "Temp score successfully added to the real score."
+                : "Temp score reset without affecting the real score.",
             score: scoreData.score,
-            combineId,
-          });
-      }
-  
-      if (isValid) {
-        scoreData.score = tempScore; 
-        scoreData.completionTime = completionTime;
-    }
-  
-      scoreData.tempScore = null; 
-      scoreData.isValid = isValid;
-  
-      await scoreData.save();
-  
-      return res.status(200).json({
-        message: isValid
-          ? "Temp score successfully added to the real score."
-          : "Temp score reset without affecting the real score.",
-        score: scoreData.score,
-        combineId
-      });
+            combineId
+        });
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Internal server error." });
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error." });
     }
-  });
-  
+});
+
 // Add wallet amount
 app.post("/wallet/add", authhentication, async (req, res) => {
     const { combineId, amount } = req.body;
@@ -2021,8 +2130,8 @@ app.get("/getAmount", authhentication, async (req, res) => {
 });
 
 // Yearly (Mega) Contest
- 
-app.post("/mega-contest",authhentication, async (req, res) => {
+
+app.post("/mega-contest", authhentication, async (req, res) => {
     const initialContestCount = 1;
     try {
         const contests = await createMegaMultipleContests(initialContestCount);
@@ -2193,7 +2302,7 @@ app.post("/mega_answer", authhentication, async (req, res) => {
 app.post("/mega_reset_score", authhentication, async (req, res) => {
     const { combineId, contestId } = req.body;
     try {
-      
+
         const combinedata = await CombineDetails.findById(combineId);
         if (!combinedata) {
             return res.status(404).json({ message: "User not found" });
@@ -2211,14 +2320,14 @@ app.post("/mega_reset_score", authhentication, async (req, res) => {
             (user) => user.id.toString() === combineId.toString()
         );
         if (userContest) {
-            userContest.score = 0;  
+            userContest.score = 0;
             await contest.save();
         }
         res.json({
             message: "Score reset successfully",
             combineId,
             contestId,
-            score: 0,  
+            score: 0,
         });
     } catch (err) {
         console.error(err);
@@ -2228,58 +2337,58 @@ app.post("/mega_reset_score", authhentication, async (req, res) => {
 
 app.post("/mega_update_score", authhentication, async (req, res) => {
     const { combineId, tempScore, isValid, completionTime, combineuser } = req.body;
-  
+
     if (typeof tempScore !== "number" || typeof isValid !== "boolean") {
-      return res.status(400).json({ message: "Invalid input format." });
+        return res.status(400).json({ message: "Invalid input format." });
     }
-  
+
     try {
-      let scoreData = await Megaleaderboard.findOne({ combineId });
-      if (!scoreData) {
-        // Create a new document if it doesn't exist
-        scoreData = new Megaleaderboard({
-            combineId,
-            score: isValid ? tempScore : 0,
-            tempScore: null,
-            isValid,
-            combineuser: combineuser,
-            completionTime: isValid ? completionTime : null,
-        });
+        let scoreData = await Megaleaderboard.findOne({ combineId });
+        if (!scoreData) {
+            // Create a new document if it doesn't exist
+            scoreData = new Megaleaderboard({
+                combineId,
+                score: isValid ? tempScore : 0,
+                tempScore: null,
+                isValid,
+                combineuser: combineuser,
+                completionTime: isValid ? completionTime : null,
+            });
+
+            await scoreData.save();
+            return res.status(200).json({
+                message: isValid
+                    ? "Temp score successfully added to the real score."
+                    : "Temp score reset without affecting the real score.",
+                score: scoreData.score,
+                combineId,
+            });
+        }
+
+        if (isValid) {
+            scoreData.score = tempScore;
+            scoreData.completionTime = completionTime;
+        }
+
+        scoreData.tempScore = null;
+        scoreData.isValid = isValid;
 
         await scoreData.save();
+
         return res.status(200).json({
             message: isValid
-              ? "Temp score successfully added to the real score."
-              : "Temp score reset without affecting the real score.",
+                ? "Temp score successfully added to the real score."
+                : "Temp score reset without affecting the real score.",
             score: scoreData.score,
-            combineId,
-          });
-      }
-  
-      if (isValid) {
-        scoreData.score = tempScore; 
-        scoreData.completionTime = completionTime;
-    }
-  
-      scoreData.tempScore = null; 
-      scoreData.isValid = isValid;
-  
-      await scoreData.save();
-  
-      return res.status(200).json({
-        message: isValid
-          ? "Temp score successfully added to the real score."
-          : "Temp score reset without affecting the real score.",
-        score: scoreData.score,
-        combineId
-      });
+            combineId
+        });
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Internal server error." });
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error." });
     }
-  });
-   
-app.get("/mega_contest_show", authhentication,  async (req, res) => { 
+});
+
+app.get("/mega_contest_show", authhentication, async (req, res) => {
     const { id } = req.query;
     try {
         let contests;
@@ -2298,7 +2407,7 @@ app.get("/mega_contest_show", authhentication,  async (req, res) => {
             return {
                 contestId: contest._id,
                 gameAmount: contest.amount,
-                winningAmount:contest.winningAmount,
+                winningAmount: contest.winningAmount,
                 isFull,
                 players: contest.combineId.map(player => ({
                     combineId: player.id,
@@ -2317,7 +2426,7 @@ app.get("/mega_contest_show", authhentication,  async (req, res) => {
     }
 });
 
-app.get("/Mega_leaderboard",authhentication,  async (req, res) => {
+app.get("/Mega_leaderboard", authhentication, async (req, res) => {
     const { combineuser } = req.query;
     try {
         const topUsers = await Megaleaderboard.find().sort({ score: -1, completionTime: 1 }).limit(100000);
@@ -2329,34 +2438,34 @@ app.get("/Mega_leaderboard",authhentication,  async (req, res) => {
 });
 
 
-app.get("/mega_user_score",authhentication, async (req, res) => {
+app.get("/mega_user_score", authhentication, async (req, res) => {
     const { combineId, contestId } = req.query;
     try {
-      if (!combineId || !contestId) {
-        return res.status(400).json({ error: "Missing combineId or contestId" });
-      }
-      const contestData = await  Megacontest.findOne({
-        _id: contestId,
-        "combineId.id": combineId, 
-      });
-      if (!contestData) {
-        return res.status(404).json({ error: "Participant not found in contest" });
-      }
-      const participant = contestData.combineId.find(
-        (user) => user.id.toString() === combineId
-      );
-      if (!participant) {
-        return res.status(404).json({ error: "User not found in contest" });
-      }
-      res.status(200).json({
-        score: participant.score,
-        fullname: participant.fullname,
-      });
+        if (!combineId || !contestId) {
+            return res.status(400).json({ error: "Missing combineId or contestId" });
+        }
+        const contestData = await Megacontest.findOne({
+            _id: contestId,
+            "combineId.id": combineId,
+        });
+        if (!contestData) {
+            return res.status(404).json({ error: "Participant not found in contest" });
+        }
+        const participant = contestData.combineId.find(
+            (user) => user.id.toString() === combineId
+        );
+        if (!participant) {
+            return res.status(404).json({ error: "User not found in contest" });
+        }
+        res.status(200).json({
+            score: participant.score,
+            fullname: participant.fullname,
+        });
     } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Server error" });
+        console.error("Error:", error);
+        res.status(500).json({ error: "Server error" });
     }
- });
+});
 // Globli LeaderBoard
 app.post("/leaderboard/globle", authhentication, async (req, res) => {
     const { combineId } = req.body;
@@ -2606,7 +2715,7 @@ app.post("/weekly_answer", authhentication, async (req, res) => {
 app.post("/weekly_reset_score", authhentication, async (req, res) => {
     const { combineId, contestId } = req.body;
     try {
-      
+
         const combinedata = await CombineDetails.findById(combineId);
         if (!combinedata) {
             return res.status(404).json({ message: "User not found" });
@@ -2624,14 +2733,14 @@ app.post("/weekly_reset_score", authhentication, async (req, res) => {
             (user) => user.id.toString() === combineId.toString()
         );
         if (userContest) {
-            userContest.score = 0;  
+            userContest.score = 0;
             await contest.save();
         }
         res.json({
             message: "Score reset successfully",
             combineId,
             contestId,
-            score: 0,  
+            score: 0,
         });
     } catch (err) {
         console.error(err);
@@ -2641,57 +2750,57 @@ app.post("/weekly_reset_score", authhentication, async (req, res) => {
 
 app.post("/weekly_update-score", authhentication, async (req, res) => {
     const { combineId, tempScore, isValid, completionTime, combineuser } = req.body;
-  
+
     if (typeof tempScore !== "number" || typeof isValid !== "boolean") {
-      return res.status(400).json({ message: "Invalid input format." });
+        return res.status(400).json({ message: "Invalid input format." });
     }
-  
+
     try {
-      let scoreData = await Weeklyleaderboard.findOne({ combineId });
-      if (!scoreData) {
-        // Create a new document if it doesn't exist
-        scoreData = new Weeklyleaderboard({
-            combineId,
-            score: isValid ? tempScore : 0,
-            tempScore: null,
-            isValid,
-            combineuser: combineuser,
-            completionTime: isValid ? completionTime : null,
-        });
+        let scoreData = await Weeklyleaderboard.findOne({ combineId });
+        if (!scoreData) {
+            // Create a new document if it doesn't exist
+            scoreData = new Weeklyleaderboard({
+                combineId,
+                score: isValid ? tempScore : 0,
+                tempScore: null,
+                isValid,
+                combineuser: combineuser,
+                completionTime: isValid ? completionTime : null,
+            });
+
+            await scoreData.save();
+            return res.status(200).json({
+                message: isValid
+                    ? "Temp score successfully added to the real score."
+                    : "Temp score reset without affecting the real score.",
+                score: scoreData.score,
+                combineId,
+            });
+        }
+
+        if (isValid) {
+            scoreData.score = tempScore;
+            scoreData.completionTime = completionTime;
+        }
+
+        scoreData.tempScore = null;
+        scoreData.isValid = isValid;
 
         await scoreData.save();
+
         return res.status(200).json({
             message: isValid
-              ? "Temp score successfully added to the real score."
-              : "Temp score reset without affecting the real score.",
+                ? "Temp score successfully added to the real score."
+                : "Temp score reset without affecting the real score.",
             score: scoreData.score,
             combineId,
-          });
-      }
-  
-      if (isValid) {
-        scoreData.score = tempScore; 
-        scoreData.completionTime = completionTime;
-      }
-  
-      scoreData.tempScore = null; 
-      scoreData.isValid = isValid;
-  
-      await scoreData.save();
-  
-      return res.status(200).json({
-        message: isValid
-          ? "Temp score successfully added to the real score."
-          : "Temp score reset without affecting the real score.",
-        score: scoreData.score,
-        combineId,
-      });
+        });
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Internal server error." });
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error." });
     }
 });
-  
+
 app.get("/Weekly_leaderboard", authhentication, async (req, res) => {
     const { combineuser } = req.query;
     try {
@@ -2703,7 +2812,7 @@ app.get("/Weekly_leaderboard", authhentication, async (req, res) => {
     }
 });
 
-app.get("/Weekly_contest_show",authhentication, async (req, res) => { 
+app.get("/Weekly_contest_show", authhentication, async (req, res) => {
     const { id } = req.query;
     try {
         let contests;
@@ -2722,7 +2831,7 @@ app.get("/Weekly_contest_show",authhentication, async (req, res) => {
             return {
                 contestId: contest._id,
                 gameAmount: contest.amount,
-                winningAmount:contest.winningAmount,
+                winningAmount: contest.winningAmount,
                 isFull,
                 players: contest.combineId.map(player => ({
                     combineId: player.id,
@@ -2741,34 +2850,34 @@ app.get("/Weekly_contest_show",authhentication, async (req, res) => {
     }
 });
 
-app.get("/Weekly_user_score",authhentication, async (req, res) => {
+app.get("/Weekly_user_score", authhentication, async (req, res) => {
     const { combineId, contestId } = req.query;
     try {
-      if (!combineId || !contestId) {
-        return res.status(400).json({ error: "Missing combineId or contestId" });
-      }
-      const contestData = await weeklycontest.findOne({
-        _id: contestId,
-        "combineId.id": combineId, 
-      });
-      if (!contestData) {
-        return res.status(404).json({ error: "Participant not found in contest" });
-      }
-      const participant = contestData.combineId.find(
-        (user) => user.id.toString() === combineId
-      );
-      if (!participant) {
-        return res.status(404).json({ error: "User not found in contest" });
-      }
-      res.status(200).json({
-        score: participant.score,
-        fullname: participant.fullname,
-      });
+        if (!combineId || !contestId) {
+            return res.status(400).json({ error: "Missing combineId or contestId" });
+        }
+        const contestData = await weeklycontest.findOne({
+            _id: contestId,
+            "combineId.id": combineId,
+        });
+        if (!contestData) {
+            return res.status(404).json({ error: "Participant not found in contest" });
+        }
+        const participant = contestData.combineId.find(
+            (user) => user.id.toString() === combineId
+        );
+        if (!participant) {
+            return res.status(404).json({ error: "User not found in contest" });
+        }
+        res.status(200).json({
+            score: participant.score,
+            fullname: participant.fullname,
+        });
     } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Server error" });
+        console.error("Error:", error);
+        res.status(500).json({ error: "Server error" });
     }
-  });
+});
 
 //monthly Api 
 app.post("/monthly-contest", authhentication, async (req, res) => {
@@ -2947,7 +3056,7 @@ app.post("/monthly_answer", authhentication, async (req, res) => {
 app.post("/monthly_reset_score", authhentication, async (req, res) => {
     const { combineId, contestId } = req.body;
     try {
-      
+
         const combinedata = await CombineDetails.findById(combineId);
         if (!combinedata) {
             return res.status(404).json({ message: "User not found" });
@@ -2965,14 +3074,14 @@ app.post("/monthly_reset_score", authhentication, async (req, res) => {
             (user) => user.id.toString() === combineId.toString()
         );
         if (userContest) {
-            userContest.score = 0;  
+            userContest.score = 0;
             await contest.save();
         }
         res.json({
             message: "Score reset successfully",
             combineId,
             contestId,
-            score: 0,  
+            score: 0,
         });
     } catch (err) {
         console.error(err);
@@ -2982,88 +3091,88 @@ app.post("/monthly_reset_score", authhentication, async (req, res) => {
 
 app.post("/monthly_update-score", authhentication, async (req, res) => {
     const { combineId, tempScore, isValid, completionTime, combineuser } = req.body;
-  
+
     if (typeof tempScore !== "number" || typeof isValid !== "boolean") {
-      return res.status(400).json({ message: "Invalid input format." });
+        return res.status(400).json({ message: "Invalid input format." });
     }
-  
+
     try {
-      let scoreData = await Monthlyleaderboard.findOne({ combineId });
-      if (!scoreData) {
-        // Create a new document if it doesn't exist
-        scoreData = new Monthlyleaderboard({
-            combineId,
-            score: isValid ? tempScore : 0,
-            tempScore: null,
-            isValid,
-            combineuser: combineuser,
-            completionTime: isValid ? completionTime : null,
-        });
+        let scoreData = await Monthlyleaderboard.findOne({ combineId });
+        if (!scoreData) {
+            // Create a new document if it doesn't exist
+            scoreData = new Monthlyleaderboard({
+                combineId,
+                score: isValid ? tempScore : 0,
+                tempScore: null,
+                isValid,
+                combineuser: combineuser,
+                completionTime: isValid ? completionTime : null,
+            });
+
+            await scoreData.save();
+            return res.status(200).json({
+                message: isValid
+                    ? "Temp score successfully added to the real score."
+                    : "Temp score reset without affecting the real score.",
+                score: scoreData.score,
+                combineId,
+            });
+        }
+
+        if (isValid) {
+            scoreData.score = tempScore;
+            scoreData.completionTime = completionTime;
+        }
+
+        scoreData.tempScore = null;
+        scoreData.isValid = isValid;
 
         await scoreData.save();
+
         return res.status(200).json({
             message: isValid
-              ? "Temp score successfully added to the real score."
-              : "Temp score reset without affecting the real score.",
+                ? "Temp score successfully added to the real score."
+                : "Temp score reset without affecting the real score.",
             score: scoreData.score,
-            combineId,
-          });
-      }
-  
-      if (isValid) {
-        scoreData.score = tempScore; 
-        scoreData.completionTime = completionTime;
-    }
-  
-      scoreData.tempScore = null; 
-      scoreData.isValid = isValid;
-  
-      await scoreData.save();
-  
-      return res.status(200).json({
-        message: isValid
-          ? "Temp score successfully added to the real score."
-          : "Temp score reset without affecting the real score.",
-        score: scoreData.score,
-        combineId
-      });
+            combineId
+        });
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Internal server error." });
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error." });
     }
-  });
-  
-app.get("/monthly_user_score",authhentication, async (req, res) => {
+});
+
+app.get("/monthly_user_score", authhentication, async (req, res) => {
     const { combineId, contestId } = req.query;
     try {
-      if (!combineId || !contestId) {
-        return res.status(400).json({ error: "Missing combineId or contestId" });
-      }
-      const contestData = await monthContest.findOne({
-        _id: contestId,
-        "combineId.id": combineId, 
-      });
-      if (!contestData) {
-        return res.status(404).json({ error: "Participant not found in contest" });
-      }
-      const participant = contestData.combineId.find(
-        (user) => user.id.toString() === combineId
-      );
-      if (!participant) {
-        return res.status(404).json({ error: "User not found in contest" });
-      }
-      res.status(200).json({
-        score: participant.score,
-        fullname: participant.fullname,
-      });
+        if (!combineId || !contestId) {
+            return res.status(400).json({ error: "Missing combineId or contestId" });
+        }
+        const contestData = await monthContest.findOne({
+            _id: contestId,
+            "combineId.id": combineId,
+        });
+        if (!contestData) {
+            return res.status(404).json({ error: "Participant not found in contest" });
+        }
+        const participant = contestData.combineId.find(
+            (user) => user.id.toString() === combineId
+        );
+        if (!participant) {
+            return res.status(404).json({ error: "User not found in contest" });
+        }
+        res.status(200).json({
+            score: participant.score,
+            fullname: participant.fullname,
+        });
     } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Server error" });
+        console.error("Error:", error);
+        res.status(500).json({ error: "Server error" });
     }
-  });
+});
 
 
-app.get("/monthly_contest_show", authhentication, async (req, res) => { 
+app.get("/monthly_contest_show", authhentication, async (req, res) => {
     const { id } = req.query;
     try {
         let contests;
@@ -3075,18 +3184,18 @@ app.get("/monthly_contest_show", authhentication, async (req, res) => {
                 return res.status(404).send({ message: "Contest not found" });
             }
             contests = [contests];
-     
+
         } else {
             contests = await monthContest.find();
         }
-     
+
         const contestsWithStatus = contests.map(contest => {
             const isFull = contest.combineId.length >= 1000000;
-     
+
             return {
                 contestId: contest._id,
                 gameAmount: contest.amount,
-                winningAmount:contest.winningAmount,
+                winningAmount: contest.winningAmount,
                 isFull,
                 players: contest.combineId.map(player => ({
                     combineId: player.id,
@@ -3099,7 +3208,7 @@ app.get("/monthly_contest_show", authhentication, async (req, res) => {
             contests: contestsWithStatus,
             message: "Contests retrieved successfully"
         });
-        
+
     } catch (error) {
         console.error("Error:", error);
         res.status(500).send("Internal server error");
@@ -3118,7 +3227,7 @@ app.get("/Monthly_leaderboard", authhentication, async (req, res) => {
 });
 
 // practice  Contest
-app.post("/practice_Contest",authhentication, async (req, res) => {
+app.post("/practice_Contest", authhentication, async (req, res) => {
     try {
         const { combineId, fullname } = req.body;
         console.log("Request body:", req.body);
@@ -3137,12 +3246,12 @@ app.post("/practice_Contest",authhentication, async (req, res) => {
         console.error("Error while creating contest:", error);
         return res.status(500).json({
             error: "An error occurred while creating the contest",
-            details: error.message 
+            details: error.message
         });
     }
 });
 
-app.post("/practice_question", authhentication,  async (req, res) => {
+app.post("/practice_question", authhentication, async (req, res) => {
     const { combineId } = req.body;
     try {
         const othervalues = await CombineDetails.findById(combineId);
@@ -3165,8 +3274,8 @@ app.post("/practice_question", authhentication,  async (req, res) => {
     }
 });
 
-app.post("/practice_answer",authhentication, async (req, res) => {
-    const { combineId, contestId, practiceQuestionId, selectedOption, fullname } = req.body; 
+app.post("/practice_answer", authhentication, async (req, res) => {
+    const { combineId, contestId, practiceQuestionId, selectedOption, fullname } = req.body;
 
     try {
         const user = await CombineDetails.findById(combineId);
@@ -3193,10 +3302,10 @@ app.post("/practice_answer",authhentication, async (req, res) => {
         const isCorrect = question.correctAnswer === selectedOption;
 
         if (isCorrect) {
-            user.score += 1; 
+            user.score += 1;
             await user.save();
 
-            contest.Score += 1; 
+            contest.Score += 1;
             await contest.save();
         }
 
@@ -3205,7 +3314,7 @@ app.post("/practice_answer",authhentication, async (req, res) => {
             contestId,
             practiceQuestionId,
             selectedOption,
-            fullname, 
+            fullname,
         });
         await answer.save();
 
@@ -3224,7 +3333,7 @@ app.post("/practice_answer",authhentication, async (req, res) => {
 
         res.status(200).send({
             combineId,
-            fullname, 
+            fullname,
             contestId,
             practiceQuestionId,
             selectedOption,
@@ -3235,9 +3344,8 @@ app.post("/practice_answer",authhentication, async (req, res) => {
                 totalCorrectAnswers: totalCorrect,
                 totalIncorrectAnswers: totalIncorrect,
             },
-            message: `Your answer was ${
-                isCorrect ? "correct" : "incorrect"
-            }.`,
+            message: `Your answer was ${isCorrect ? "correct" : "incorrect"
+                }.`,
         });
     } catch (error) {
         console.log(error);
@@ -3245,7 +3353,7 @@ app.post("/practice_answer",authhentication, async (req, res) => {
     }
 });
 
-app.get("/get_user_score",authhentication, async (req, res) => {
+app.get("/get_user_score", authhentication, async (req, res) => {
     const { combineId, contestId } = req.query;
     try {
         if (!combineId || !contestId) {
@@ -3258,11 +3366,11 @@ app.get("/get_user_score",authhentication, async (req, res) => {
         if (!contestData) {
             return res.status(404).json({ error: "Participant not found in contest" });
         }
-        const performance = contestData.Score < 5 
-            ? "Bad" 
-            : contestData.Score < 10 
-            ? "Average" 
-            : "Good";
+        const performance = contestData.Score < 5
+            ? "Bad"
+            : contestData.Score < 10
+                ? "Average"
+                : "Good";
         res.status(200).json({
             score: contestData.Score,
             fullname: contestData.fullname,
@@ -3275,8 +3383,8 @@ app.get("/get_user_score",authhentication, async (req, res) => {
 });
 
 // key Api 
-app.post('/create-key-contest',authhentication, async (req, res) => {
-    const joinAmount = 21; 
+app.post('/create-key-contest', authhentication, async (req, res) => {
+    const joinAmount = 21;
     const participants = [];
 
     const generateKey = () => {
@@ -3317,7 +3425,7 @@ app.post('/create-key-contest',authhentication, async (req, res) => {
     }
 });
 
-app.post('/join-contest-key',authhentication, async (req, res) => {
+app.post('/join-contest-key', authhentication, async (req, res) => {
     const { key, combineId, fullname } = req.body;
 
     if (!key || !combineId || !fullname) {
@@ -3379,7 +3487,7 @@ app.post("/manual_questions", authhentication, async (req, res) => {
         if (!othervalues) {
             return res.status(400).send({ message: "Data is not available" });
         }
-   
+
         const count = await gkQuestion.countDocuments();
         if (count === 0) {
             return res.status(404).send({
@@ -3425,7 +3533,7 @@ app.post("/manual_answer", authhentication, async (req, res) => {
                 (participant) => participant.combineId.toString() === combineId
             );
             if (userContest) {
-                userContest.score = (userContest.score || 0) + 1; 
+                userContest.score = (userContest.score || 0) + 1;
                 contestScore = userContest.score;
                 await contest.save();
             }
@@ -3450,7 +3558,7 @@ app.get("/getTeacherContest", authhentication, async (req, res) => {
     try {
         const schoolName = req.query.schoolName;
         const classValue = req.query.classValue;
-        const teacherContest = await TeacherContest.find({schoolName: schoolName, class: classValue}).select("-participants -_v");
+        const teacherContest = await TeacherContest.find({ schoolName: schoolName, class: classValue }).select("-participants -_v");
 
         res.status(200).json({ success: true, teacherContest });
     } catch (error) {
@@ -3484,10 +3592,10 @@ app.post("/join_teacher_contest", authhentication, async (req, res) => {
         const userEntry = contest.participants.find(
             (entry) => entry.combineId.toString() === newcombineId.toString()
         );
-        if(userEntry) return res.status(404).json({ message: "You have already joined this contest" });
+        if (userEntry) return res.status(404).json({ message: "You have already joined this contest" });
 
         // add condition of if user already exist
-        await contest.participants.push({ combineId: newcombineId, combineuser: fullname});
+        await contest.participants.push({ combineId: newcombineId, combineuser: fullname });
 
         wallet.balance -= amountFromMainBalance;
         wallet.referralBalance -= amountFromReferralBalance;
@@ -3532,8 +3640,8 @@ app.post("/teacher_question", authhentication, async (req, res) => {
                 totalQuestions: count,
             });
         }
-        const question = await TeacherQuestion.find({_id: questionId});
-        res.status(200).send({ question});
+        const question = await TeacherQuestion.find({ _id: questionId });
+        res.status(200).send({ question });
     } catch (error) {
         console.log(error);
         res.status(500).send({ message: "Internal server error" });
@@ -3554,19 +3662,19 @@ app.post("/teacher_answer", authhentication, async (req, res) => {
         let contestScore = 0;
 
         const contest = await TeacherContest.findById(contestId);
-        if (!contest) { return res.status(404).json({ message: "Contest not found" })}
-        if (!Array.isArray(contest.participants)) { return res.status(400).json({ message: "Invalid contest data" })}
+        if (!contest) { return res.status(404).json({ message: "Contest not found" }) }
+        if (!Array.isArray(contest.participants)) { return res.status(400).json({ message: "Invalid contest data" }) }
         const userContest = contest.participants.find(
             (participant) => participant.combineId?.toString() === combineId?.toString()
         );
-        if (!userContest) return res.status(404).json({message: "Your are not join the contest yet."});
-        if (userContest.isCompleted) return res.status(404).json({message: "You already joined this contest"});
+        if (!userContest) return res.status(404).json({ message: "Your are not join the contest yet." });
+        if (userContest.isCompleted) return res.status(404).json({ message: "You already joined this contest" });
         if (isCorrect) {
             userContest.score += 1;
             userContest.combineuser = combineuser;
             userContest.completionTime = completionTime;
-            contestScore = userContest.score; 
-            if(completionTime) userContest.isCompleted = true;               
+            contestScore = userContest.score;
+            if (completionTime) userContest.isCompleted = true;
         } else {
             userContest.combineuser = combineuser;
             userContest.completionTime = completionTime;
@@ -3588,24 +3696,24 @@ app.post("/teacher_answer", authhentication, async (req, res) => {
 });
 
 app.get("/teacher_leaderboard", authhentication, async (req, res) => {
-    const { schoolName, classValue} = req.query;
+    const { schoolName, classValue } = req.query;
     try {
-      const contest = await TeacherContest.findOne({schoolName: schoolName, class: classValue});
-      if (!contest) {
-        return res.status(404).json({ message: "Contest not found" });
-      }
-      if (!Array.isArray(contest.participants)) {
-        return res.status(400).json({ message: "Invalid contest data" });
-      }
-
-      let topUsers = contest.participants.sort((a, b) => {
-        if (b.score === a.score && a.completionTime != null && b.completionTime != null) {
-          return a.completionTime - b.completionTime;
+        const contest = await TeacherContest.findOne({ schoolName: schoolName, class: classValue });
+        if (!contest) {
+            return res.status(404).json({ message: "Contest not found" });
         }
-        return b.score - a.score;
-      }).slice(0, 100);
-  
-      res.json({ topUsers});
+        if (!Array.isArray(contest.participants)) {
+            return res.status(400).json({ message: "Invalid contest data" });
+        }
+
+        let topUsers = contest.participants.sort((a, b) => {
+            if (b.score === a.score && a.completionTime != null && b.completionTime != null) {
+                return a.completionTime - b.completionTime;
+            }
+            return b.score - a.score;
+        }).slice(0, 100);
+
+        res.json({ topUsers });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Server Error" });
@@ -3675,55 +3783,55 @@ app.post("/addquestionpractice", async (req, res) => {
 });
 
 app.post("/teacherform", async (req, res) => {
-  const { schoolName, teacherName, Address, Number, Gmail, password, confirmPassword, role } = req.body;
-  if (!schoolName || !teacherName || !Address || !Number || !Gmail || !password || !confirmPassword || !role) {
-    return res.status(400).json({ message: "All fields are required." });
-  }
-  if (password !== confirmPassword) {
-    return res.status(400).json({ message: "Passwords do not match." });
-  }
-  try {
-    const newTeacher = new Schoolform({
-      schoolName,
-      teacherName,
-      Address,
-      Number,
-      Gmail,
-      password,
-      confirmPassword,
-      role
-    });
+    const { schoolName, teacherName, Address, Number, Gmail, password, confirmPassword, role } = req.body;
+    if (!schoolName || !teacherName || !Address || !Number || !Gmail || !password || !confirmPassword || !role) {
+        return res.status(400).json({ message: "All fields are required." });
+    }
+    if (password !== confirmPassword) {
+        return res.status(400).json({ message: "Passwords do not match." });
+    }
+    try {
+        const newTeacher = new Schoolform({
+            schoolName,
+            teacherName,
+            Address,
+            Number,
+            Gmail,
+            password,
+            confirmPassword,
+            role
+        });
 
-    await newTeacher.save();
-   
-    res.status(201).json({ message: "success", teacher: newTeacher });
-  } catch (error) {
-    console.error("Error saving teacher data:", error);
-    res.status(500).json({ message: "Internal server error." });
-  }
+        await newTeacher.save();
+
+        res.status(201).json({ message: "success", teacher: newTeacher });
+    } catch (error) {
+        console.error("Error saving teacher data:", error);
+        res.status(500).json({ message: "Internal server error." });
+    }
 });
 
 app.post("/login/teacher", async (req, res) => {
     const { Gmail, password } = req.body;
     if (!Gmail || !password) {
-      return res.status(400).json({ message: "Gmail and password are required." });
+        return res.status(400).json({ message: "Gmail and password are required." });
     }
     try {
-      const user = await Schoolform.findOne({ Gmail });
-      if (!user) {
-        return res.status(404).json({ message: "User not found. Please register first." });
-      }
-      console.log(user)
-      if (user.password !== password) {
-        return res.status(401).json({ message: "Invalid password." });
-      }
-      const token = jwt.sign({ Gmail }, secretKey, { expiresIn: "24h" });
-      res.status(200).json({ message: "success", user , token });
+        const user = await Schoolform.findOne({ Gmail });
+        if (!user) {
+            return res.status(404).json({ message: "User not found. Please register first." });
+        }
+        console.log(user)
+        if (user.password !== password) {
+            return res.status(401).json({ message: "Invalid password." });
+        }
+        const token = jwt.sign({ Gmail }, secretKey, { expiresIn: "24h" });
+        res.status(200).json({ message: "success", user, token });
     } catch (error) {
-      console.error("Error during login:", error);
-      res.status(500).json({ message: "Internal server error." });
+        console.error("Error during login:", error);
+        res.status(500).json({ message: "Internal server error." });
     }
-  });
+});
 
 app.post("/child/register", async (req, res) => {
     const { name, lastName, phoneNumber, school, password, confirmPassword, Gmail, role } = req.body;
@@ -3743,7 +3851,7 @@ app.post("/child/register", async (req, res) => {
             lastName,
             phoneNumber,
             school,
-            password, 
+            password,
             Gmail,
             role
         });
@@ -3765,7 +3873,7 @@ app.post("/login/child", async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: "User not found. Please register first." });
         }
-        const isMatch = password === user.password; 
+        const isMatch = password === user.password;
         if (!isMatch) {
             return res.status(401).json({ message: "Invalid password." });
         }
@@ -3802,7 +3910,7 @@ app.post("/login/child", async (req, res) => {
 //     const { schoolName, combineId, fullname, schoolContestId } = req.body; 
 //     try {
 //         const user = await CombineDetails.findById( combineId); 
-        
+
 //         if (!user) {
 //             return res.status(400).json({ message: 'User does not exist.' });
 //         }
@@ -3836,7 +3944,7 @@ app.post("/login/child", async (req, res) => {
 //         if (!othervalues) {
 //             return res.status(400).send({ message: "Data is not available" });
 //         }
-   
+
 //         const count = await gkQuestion.countDocuments();
 //         if (count === 0) {
 //             return res.status(404).send({
@@ -3859,34 +3967,34 @@ app.post("/login/child", async (req, res) => {
 
 app.post("/addquestion", async (req, res) => {
     try {
-      const { collectionName, question, correctAnswer, options } = req.body;
-      if (!collectionName || !question || !correctAnswer || !options || !Array.isArray(options) || options.length < 2) {
-        return res.status(400).json({ message: "All fields are required, and options must have at least two items." });
-      }
-      const QuestionModel = mongoose.model(collectionName, questionSchema, collectionName);
-      const newQuestion = new QuestionModel({
-        question,
-        correctAnswer,
-        options,
-      });
-      await newQuestion.save();
-      const documentCount = await QuestionModel.countDocuments();
-  
-      res.status(201).json({
-        message: `Question added to the ${collectionName} collection successfully.`,
-        question: newQuestion,
-        totalDocuments: documentCount,
-      });
+        const { collectionName, question, correctAnswer, options } = req.body;
+        if (!collectionName || !question || !correctAnswer || !options || !Array.isArray(options) || options.length < 2) {
+            return res.status(400).json({ message: "All fields are required, and options must have at least two items." });
+        }
+        const QuestionModel = mongoose.model(collectionName, questionSchema, collectionName);
+        const newQuestion = new QuestionModel({
+            question,
+            correctAnswer,
+            options,
+        });
+        await newQuestion.save();
+        const documentCount = await QuestionModel.countDocuments();
+
+        res.status(201).json({
+            message: `Question added to the ${collectionName} collection successfully.`,
+            question: newQuestion,
+            totalDocuments: documentCount,
+        });
     } catch (error) {
-      console.error("Error adding question:", error);
-      res.status(500).json({ message: "Server Error" });
+        console.error("Error adding question:", error);
+        res.status(500).json({ message: "Server Error" });
     }
 });
 
 app.get("/checkPhoneNumber", authhentication, async (req, res) => {
-    try{
-        const {phoneNumber} = req.query;
-        if(!phoneNumber) res.status(200).json({ success: false, message: "Phone number is required" });
+    try {
+        const { phoneNumber } = req.query;
+        if (!phoneNumber) res.status(200).json({ success: false, message: "Phone number is required" });
         const userData = await CombineDetails.findOne({
             $or: [
                 { "formDetails.phoneNumber": phoneNumber },
@@ -3894,7 +4002,7 @@ app.get("/checkPhoneNumber", authhentication, async (req, res) => {
             ],
         }).select('_id formDetails studentDetails');
 
-        if(!userData) return res.status(200).json({ success: false, message: "Don't have account on this number" });
+        if (!userData) return res.status(200).json({ success: false, message: "Don't have account on this number" });
 
         const name =
             (userData?.formDetails?.fullname) ||
@@ -3913,10 +4021,10 @@ app.post("/wallet_to_wallet_transfer", authhentication, async (req, res) => {
         const { amount, senderCombineId, receiverCombineId } = req.body;
         let senderNumber = req.user.phoneNumber;
         let receiverNumber;
-        
+
         if (!amount || !receiverCombineId || !senderCombineId) return res.status(400).json({ success: false, message: "Required details are missing" });
         if (senderCombineId === receiverCombineId) return res.status(400).json({ success: false, message: "Can't send money to your own wallet" });
-        
+
         const senderWallet = await getWalletBycombineId(senderCombineId);
         if (!senderWallet) return res.status(404).json({ success: false, message: "Sender's wallet not found" });
         if (senderWallet.balance < amount) return res.status(400).json({ success: false, message: "Insufficient balance" });
@@ -3926,7 +4034,7 @@ app.post("/wallet_to_wallet_transfer", authhentication, async (req, res) => {
 
         const receiverData = await CombineDetails.findById(receiverCombineId).select('_id formDetails studentDetails');
         if (!receiverData) return res.status(404).json({ success: false, message: "Receiver not found" });
-        if(receiverData.formDetails){
+        if (receiverData.formDetails) {
             receiverNumber = receiverData.formDetails.phoneNumber;
         } else {
             receiverNumber = receiverData.studentDetails.phoneNumber;
@@ -3934,7 +4042,7 @@ app.post("/wallet_to_wallet_transfer", authhentication, async (req, res) => {
 
         senderWallet.balance = Number(senderWallet.balance) - Number(amount);
         receiverWallet.balance = Number(receiverWallet.balance) + Number(amount);
-        
+
         await senderWallet.save();
         await receiverWallet.save();
         await logTransaction(senderCombineId, -amount, "debit", `Send to ${receiverNumber}`, "completed");
@@ -3949,54 +4057,54 @@ app.post("/wallet_to_wallet_transfer", authhentication, async (req, res) => {
 
 app.post('/wallet_to_bank_transfer', authhentication, async (req, res) => {
     try {
-      const { fullname, userId, accountNumber, ifsc, amount } = req.body;
-  
-      if (!fullname || !accountNumber || !ifsc || !amount || !userId) {
-        return res.status(400).json({ success: false, message: 'Required details are missing' });
-      }
-  
-      const userWallet = await getWalletBycombineId(userId);
-      if (!userWallet) return res.status(404).json({ success: false, message: "User's wallet not found" });
-      if (Number(userWallet.balance) < Number(amount)) return res.status(400).json({ success: false, message: 'Insufficient balance' });
+        const { fullname, userId, accountNumber, ifsc, amount } = req.body;
 
-      userWallet.balance = Number(userWallet.balance) - Number(amount);
-      await userWallet.save();
-  
-      const transaction = await logTransaction(userId, -amount, 'debit', 'Withdraw', 'pending');
+        if (!fullname || !accountNumber || !ifsc || !amount || !userId) {
+            return res.status(400).json({ success: false, message: 'Required details are missing' });
+        }
 
-      const withdrawalRequest = new WithdrawalRequest({
-        userId,
-        transactionId: transaction._id,
-        fullname,
-        accountNumber,
-        ifsc,
-        amount,
-        status: 'pending'
-      });
-      await withdrawalRequest.save();
-  
-      return res.status(200).json({ success: true, message: 'Withdrawal request submitted' });
+        const userWallet = await getWalletBycombineId(userId);
+        if (!userWallet) return res.status(404).json({ success: false, message: "User's wallet not found" });
+        if (Number(userWallet.balance) < Number(amount)) return res.status(400).json({ success: false, message: 'Insufficient balance' });
+
+        userWallet.balance = Number(userWallet.balance) - Number(amount);
+        await userWallet.save();
+
+        const transaction = await logTransaction(userId, -amount, 'debit', 'Withdraw', 'pending');
+
+        const withdrawalRequest = new WithdrawalRequest({
+            userId,
+            transactionId: transaction._id,
+            fullname,
+            accountNumber,
+            ifsc,
+            amount,
+            status: 'pending'
+        });
+        await withdrawalRequest.save();
+
+        return res.status(200).json({ success: true, message: 'Withdrawal request submitted' });
     } catch (error) {
-      console.error("Wallet to bank transfer error:", error);
-      return res.status(500).json({ success: false, message: 'Internal server error' });
+        console.error("Wallet to bank transfer error:", error);
+        return res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  });
-  
+});
+
 app.post('/verify_bank_account', authhentication, async (req, res) => {
     const { accountNumber, ifsc } = req.body;
 
-    if (!accountNumber || !ifsc) { return res.status(400).json({ success: false, message: 'Account number and IFSC are required' })}
+    if (!accountNumber || !ifsc) { return res.status(400).json({ success: false, message: 'Account number and IFSC are required' }) }
     try {
         // const response = await axios.post('https://api.razorpay.com/v1/fund_accounts/validate', 
         //     { account_number: accountNumber, ifsc: ifsc },
         //     { auth: { username: 'your_api_key', password: 'your_api_secret' }, headers: { 'Content-Type': 'application/json' }}
         // );
         // if (response.data.success) {
-            return res.json({
-                success: true,
-                // accountHolderName: response.data.account_holder_name
-                accountHolderName: "Hello user"
-            });
+        return res.json({
+            success: true,
+            // accountHolderName: response.data.account_holder_name
+            accountHolderName: "Hello user"
+        });
         // } else {
         //     return res.json({ success: false, message: 'Invalid account details' });
         // }
@@ -4007,19 +4115,19 @@ app.post('/verify_bank_account', authhentication, async (req, res) => {
 
 app.post("/create-order", authhentication, async (req, res) => {
     try {
-      const { enteredAmount } = req.body;
-        
-      const options = {
-        amount: enteredAmount * 100, // Amount in paise
-        currency: "INR",
-        receipt: `receipt_${Date.now()}`,
-      };
-  
-      const order = await razorpay.orders.create(options);
-      res.json({ orderId: order.id });
+        const { enteredAmount } = req.body;
+
+        const options = {
+            amount: enteredAmount * 100, // Amount in paise
+            currency: "INR",
+            receipt: `receipt_${Date.now()}`,
+        };
+
+        const order = await razorpay.orders.create(options);
+        res.json({ orderId: order.id });
     } catch (error) {
-      console.error("Order Creation Failed", error);
-      res.status(500).json({ error: "Failed to create order" });
+        console.error("Order Creation Failed", error);
+        res.status(500).json({ error: "Failed to create order" });
     }
 });
 
@@ -4030,7 +4138,7 @@ app.post("/verify-payment", authhentication, async (req, res) => {
         if (!orderId || !paymentId || !amount || !userId) {
             return res.status(400).json({ success: false, message: 'Required details are missing' });
         }
-        
+
         const userWallet = await getWalletBycombineId(userId);
         if (!userWallet) return res.status(404).json({ success: false, message: "User's wallet not found" });
 
@@ -4047,13 +4155,13 @@ app.post("/verify-payment", authhentication, async (req, res) => {
 });
 
 app.get("/getTransactions", authhentication, async (req, res) => {
-    try {   
+    try {
         const combineId = req.query.combineId;
         if (!combineId || typeof combineId !== "string") {
             return res.status(400).json({ success: false, message: "Invalid or missing combineId" });
         }
 
-        const transactions = await Transaction.find({combineId : combineId }).lean();
+        const transactions = await Transaction.find({ combineId: combineId }).lean();
 
         if (transactions.length === 0) {
             return res.status(404).json({ success: false, message: "No transactions found" });
@@ -4065,9 +4173,9 @@ app.get("/getTransactions", authhentication, async (req, res) => {
     }
 });
 
-  
+
 app.get("/get_app_version", async (req, res) => {
-    try {   
+    try {
         // Declare appDetailsDoc with let so it can be reassigned
         let appDetailsDoc = await AppDetails.findOne({}, { appVersion: 1, _id: 0 });
 
@@ -4077,7 +4185,7 @@ app.get("/get_app_version", async (req, res) => {
             appDetailsDoc = await AppDetails.create({ appVersion: defaultVersion, isUpdated: false });
             return res.status(200).send({ appVersion: defaultVersion });
         }
-        
+
         // If document is found, return the version
         res.status(200).send({ appVersion: appDetailsDoc.appVersion });
     } catch (error) {
@@ -4094,7 +4202,7 @@ app.use("/company", ensureAuthenticated, companyRoutes);
 
 // test Api 
 
-app.get("/address" , async (req,res)=>{
+app.get("/address", async (req, res) => {
     console.log('Hello >>>>>>>>>>>>>>>>');
     res.json("api Start, Razorpay gateway added");
 })

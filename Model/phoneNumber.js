@@ -1,13 +1,15 @@
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
 
-const phoneNumberschema = new mongoose.Schema ({
-    email: { type: String, required: true, unique: true },
+const phoneNumberSchema = new mongoose.Schema({
+    email: { type: String, required: true },
     otp: { type: String, required: true },
     otpExpiration: { type: Date, required: true },
+    referralCode: { type: String, unique: true },
     referredBy: {
         userId: mongoose.Schema.Types.ObjectId,
         fullname: String,
-    },
-})
+    }
+});
 
-module.exports= mongoose.model("phoneNumber" , phoneNumberschema);
+// Export Model
+module.exports = mongoose.model("PhoneNumber", phoneNumberSchema);
