@@ -264,7 +264,6 @@ app.get("/track-referral", async (req, res) => {
     if (!referralCode || !deviceId) {
         return res.status(400).json({ message: "Missing referral code or device ID" });
     }
-
     try {
         await Referral.findOneAndUpdate(
             { deviceId },
