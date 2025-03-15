@@ -63,7 +63,7 @@ const School = require("./Model/School.js");
 const TeacherContest = require("./Model/TeacherContest.js");
 const TeacherQuestion = require("./Model/TeacherQuestion.js");
 const crypto = require("crypto")
-
+const Fingerprint = require("express-fingerprint");
 
 const app = express();
 dotenv.config();
@@ -89,7 +89,7 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
 app.use(cookieParser());
-
+app.use(Fingerprint());
 
 // Login needed Api Start
 // Genrate-Otp Api
@@ -258,12 +258,15 @@ app.post("/send-otp", async (req, res) => {
 
 
 
+// ✅ **API 1: Website se referral track karna**
 app.get("/track-referral", async (req, res) => {
-    const {ref: referralCode, device_id: deviceId } = req.query;
+    const { ref: referralCode } = req.query;
+    const deviceId = req.cookies.deviceId || req.fingerprint.hash;  // 🔹 Auto-detect device
 
-    if (!referralCode || !deviceId) {
-        return res.status(400).json({ message: "Missing referral code or device ID" });
+    if (!referralCode) {
+        return res.status(400).json({ message: "Missing referral code" });
     }
+
     try {
         await Referral.findOneAndUpdate(
             { deviceId },
@@ -271,22 +274,19 @@ app.get("/track-referral", async (req, res) => {
             { upsert: true, new: true }
         );
 
-        res.json({ message: "Referral stored successfully" });
+        // 🔹 Store deviceId in cookies (for website tracking)
+        res.cookie("deviceId", deviceId, { maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true });
+
+        res.json({ message: "Referral stored successfully", deviceId });
     } catch (error) {
         console.error("Error storing referral:", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
 });
 
-
-
-
+// ✅ **API 2: Mobile App se referral fetch karna**
 app.get("/get-referral", async (req, res) => {
-    const { device_id: deviceId } = req.query;
-
-    if (!deviceId) {
-        return res.status(400).json({ message: "Missing device ID" });
-    }
+    const deviceId = req.fingerprint.hash;  // 🔹 Auto-detect device
 
     try {
         const referral = await Referral.findOne({ deviceId });
@@ -301,7 +301,6 @@ app.get("/get-referral", async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 });
-
 
 
 // Verify OTP
