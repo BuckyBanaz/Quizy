@@ -64,12 +64,14 @@ const TeacherContest = require("./Model/TeacherContest.js");
 const TeacherQuestion = require("./Model/TeacherQuestion.js");
 const crypto = require("crypto")
 const Fingerprint = require("express-fingerprint");
+const mg = require("nodemailer-mailgun-transport");
 
 const app = express();
 dotenv.config();
 
 const secretKey = "credmantra";
 const fast2smsAPIKey = "kuM9ZYAPpRt0hFqVW71UbOxygli64dDrQzew3JLojN5HTfaIvskCR4bYSDAznIa6VxGmuq0ytT72LZ5f";
+const MailGunApiKey = "a447c7e902b1ae90d313fc3fa05d2ba8-3d4b3a2a-d80d0a2c"
 const razorpay = new Razorpay({
     key_id: 'rzp_test_RmdMvunFIzaQ6d',
     key_secret: 'Ai6rSepUG8YxM62GmDISEk9a',
@@ -204,56 +206,58 @@ app.use(Fingerprint());
 //     }
 // });
 
+// const transporter = nodemailer.createTransport(mg(mailgunAuth));
 
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: "goquizzytechnology@gmail.com",
-        pass: "nkez hine jrsj gtsh",
-    },
-});
 
-app.post("/send-otp", async (req, res) => {
-    try {
-        const { email, referralCode } = req.body;
 
-        if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required" });
-        }
+// const mailgunAuth = {
+//     auth: {
+//         api_key: MailGunApiKey, // Aapka Mailgun API key
+//         domain: "yourdomain.com",
+//     },
+// };
 
-        const otp = Math.floor(1000 + Math.random() * 9000).toString();
-        const otpExpiration = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+// app.post("/send-otp", async (req, res) => {
+//     try {
+//         const { email, referralCode } = req.body;
 
-        // If referralCode is provided, find the referrer
-        let referredBy = null;
-        if (referralCode) {
-            const referrer = await PhoneNumber.findOne({ referralCode });
-            if (referrer) {
-                referredBy = { userId: referrer._id, fullname: referrer.fullname };
-            }
-        }
+//         if (!email) {
+//             return res.status(400).json({ success: false, message: "Email is required" });
+//         }
 
-        await PhoneNumber.findOneAndUpdate(
-            { email },
-            { email, otp, otpExpiration, referredBy },
-            { upsert: true, new: true }
-        );
+//         const otp = Math.floor(1000 + Math.random() * 9000).toString();
+//         const otpExpiration = Date.now() + 5 * 60 * 1000; // 5 minutes validity
 
-        const mailOptions = {
-            from: process.env.GMAIL_USER,
-            to: email,
-            subject: "Your OTP Code",
-            text: `Your OTP code is: ${otp}`,
-        };
+//         // If referralCode is provided, find the referrer
+//         let referredBy = null;
+//         if (referralCode) {
+//             const referrer = await PhoneNumber.findOne({ referralCode });
+//             if (referrer) {
+//                 referredBy = { userId: referrer._id, fullname: referrer.fullname };
+//             }
+//         }
 
-        await transporter.sendMail(mailOptions);
+//         await PhoneNumber.findOneAndUpdate(
+//             { email },
+//             { email, otp, otpExpiration, referredBy },
+//             { upsert: true, new: true }
+//         );
 
-        res.json({ success: true, message: "OTP sent successfully" });
-    } catch (error) {
-        console.error("Error sending OTP:", error);
-        res.status(500).json({ success: false, message: "Failed to send OTP" });
-    }
-});
+//         const mailOptions = {
+//             from: process.env.GMAIL_USER,
+//             to: email,
+//             subject: "Your OTP Code",
+//             text: `Your OTP code is: ${otp}`,
+//         };
+
+//         await transporter.sendMail(mailOptions);
+
+//         res.json({ success: true, message: "OTP sent successfully" });
+//     } catch (error) {
+//         console.error("Error sending OTP:", error);
+//         res.status(500).json({ success: false, message: "Failed to send OTP" });
+//     }
+// });
 
 
 
@@ -2878,7 +2882,7 @@ app.get("/Weekly_user_score", authhentication, async (req, res) => {
 });
 
 //monthly Api 
-app.post("/monthly-contest", authhentication, async (req, res) => {
+app.post("/monthly-contest", async (req, res) => {
     const initialContestCount = 1;
     console.log("6")
     try {
@@ -2894,7 +2898,7 @@ app.post("/monthly-contest", authhentication, async (req, res) => {
 });
 
 
-app.post("/monthly_question", authhentication, async (req, res) => {
+app.post("/monthly_question",  async (req, res) => {
     const { combineId } = req.body;
     try {
         const othervalues = await CombineDetails.findById(combineId);
@@ -2918,7 +2922,8 @@ app.post("/monthly_question", authhentication, async (req, res) => {
 });
 
 
-app.post("/monthly_join_contest", authhentication, async (req, res) => {
+
+app.post("/monthly_join_contest", async (req, res) => {
     const { contestId, newcombineId, fullname } = req.body;
 
     try {
@@ -2928,50 +2933,72 @@ app.post("/monthly_join_contest", authhentication, async (req, res) => {
         ]);
 
         if (!contest) return res.status(404).json({ message: "Contest not found" });
-        if (!wallet) return res.status(404).json({ message: "Wallet not found" });
+        if (!wallet) return res.status(404).json({ message: "Wallet not found or invalid" });
 
-        const gameAmount = contest.amount;
+        console.log("Contest Data:", contest);
+        console.log("Contest Join Amount:", contest?.amount);
+
+        // Ensure valid numbers
+        wallet.balance = Number(wallet.balance) || 0;
+        wallet.referralBalance = Number(wallet.referralBalance) || 0;
+        const gameAmount = Number(contest.amount) || 0;
+
+        if (gameAmount <= 0) {
+            return res.status(400).json({ message: "Invalid contest amount" });
+        }
+
         const fiftyPercentGameAmount = gameAmount * 0.5;
-
         const amountFromReferralBalance = Math.min(wallet.referralBalance, fiftyPercentGameAmount);
         const amountFromMainBalance = gameAmount - amountFromReferralBalance;
 
-        if (wallet.balance < amountFromMainBalance) {
-            return res.status(400).json({ message: "Insufficient balance" });
+        if (isNaN(wallet.balance) || isNaN(amountFromMainBalance) || wallet.balance < amountFromMainBalance) {
+            return res.status(400).json({ message: "Insufficient or invalid balance" });
         }
 
-        const userEntry = contest.combineId.find(
+        let userEntry = contest.combineId.find(
             (entry) => entry.id.toString() === newcombineId.toString()
         );
 
         if (userEntry) {
             userEntry.joinCount += 1;
+            userEntry.joinTime.push(new Date());
         } else {
-            contest.combineId.push({ id: newcombineId, fullname, joinCount: 1 });
+            contest.combineId.push({ id: newcombineId, fullname, joinCount: 1, joinTime: [new Date()] });
         }
 
+        // Deduct amount from both wallets
         wallet.balance -= amountFromMainBalance;
         wallet.referralBalance -= amountFromReferralBalance;
         await wallet.save();
 
+        // Log Transactions
         await Promise.all([
-            amountFromMainBalance > 0 && logTransaction(newcombineId, -amountFromMainBalance, "debit", "Contest fee", "completed"),
-            amountFromReferralBalance > 0 && logTransaction(newcombineId, -amountFromReferralBalance, "debit", "Contest fee", "completed"),
+            amountFromMainBalance > 0 && logTransaction(newcombineId, -amountFromMainBalance, "debit", "Contest fee (Real Wallet)", "completed"),
+            amountFromReferralBalance > 0 && logTransaction(newcombineId, -amountFromReferralBalance, "debit", "Contest fee (Referral Wallet)", "completed"),
         ]);
+
+        contest.time.push(new Date());
         await contest.save();
 
-        // if (contest.combineId.length >= contest.maxParticipants) {
-        //     contest.isFull = true;
-        //     await Promise.all([
-        //         contest.save(),
-        //         createNewMonthlyContest(gameAmount),
-        //     ]);
-        // }
+        if (contest.combineId.length >= contest.maxParticipants) {
+            contest.isFull = true;
+            await Promise.all([
+                contest.save(),
+                createNewMonthlyContest(gameAmount),
+            ]);
+        }
+
         res.json({
+            status: "success",
             message: "User successfully joined the monthly contest!",
-            joinCount: userEntry ? userEntry.joinCount : 1,
-            balance: wallet.balance,
-            referralBalance: wallet.referralBalance,
+            contestId: contest._id,
+            user: {
+                id: newcombineId,
+                fullname: fullname,
+                joinCount: userEntry ? userEntry.joinCount : 1,
+                balance: wallet.balance,  
+                referralBalance: wallet.referralBalance
+            },
         });
     } catch (err) {
         console.error("Error occurred:", err);
@@ -2979,7 +3006,11 @@ app.post("/monthly_join_contest", authhentication, async (req, res) => {
     }
 });
 
-app.post("/monthly_answer", authhentication, async (req, res) => {
+
+
+
+
+app.post("/monthly_answer",  async (req, res) => {
     const { combineId, contestId, gkquestionId, selectedOption, combineuser } = req.body;
 
     try {

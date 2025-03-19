@@ -110,7 +110,7 @@ async function createNewContestSchool(amount) {
 // monthly database
 
 async function createMonthlyMultipleContests() {
-    const contestAmounts = [19];
+    const contestAmounts = [10];
     const contests = [];
     for (let amount of contestAmounts) {
         const existingContest = await monthContest.findOne({ amount: amount, isFull: false });
