@@ -71,7 +71,7 @@ dotenv.config();
 
 const secretKey = "credmantra";
 const fast2smsAPIKey = "kuM9ZYAPpRt0hFqVW71UbOxygli64dDrQzew3JLojN5HTfaIvskCR4bYSDAznIa6VxGmuq0ytT72LZ5f";
-const MailGunApiKey = "a447c7e902b1ae90d313fc3fa05d2ba8-3d4b3a2a-d80d0a2c"
+const mailGunApiKey = process.env.MailGunApi
 const razorpay = new Razorpay({
     key_id: 'rzp_test_RmdMvunFIzaQ6d',
     key_secret: 'Ai6rSepUG8YxM62GmDISEk9a',
@@ -310,7 +310,7 @@ app.get("/get-referral", async (req, res) => {
 // Verify OTP
 
 app.post("/verify-otp", async (req, res) => {
-    const { email, otp } = req.body; // Now verifying by email instead of phoneNumber
+    const { email, otp , pushToken } = req.body; // Now verifying by email instead of phoneNumber
     try {
         const emailData = await PhoneNumber.findOne({ email }); // Check OTP against email
         if (!emailData || emailData.otp !== otp || emailData.otpExpiration <= Date.now()) {
@@ -383,6 +383,7 @@ app.post("/verify-otp", async (req, res) => {
             message: "OTP verified successfully",
             user: user,
             token: token,
+            pushToken:combinedata.pushToken
         });
 
     } catch (err) {
