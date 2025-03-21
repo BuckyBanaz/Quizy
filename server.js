@@ -71,7 +71,8 @@ dotenv.config();
 
 const secretKey = "credmantra";
 const fast2smsAPIKey = "kuM9ZYAPpRt0hFqVW71UbOxygli64dDrQzew3JLojN5HTfaIvskCR4bYSDAznIa6VxGmuq0ytT72LZ5f";
-const mailGunApiKey = process.env.MailGunApi
+// sdftsfdghbasuhsjfwjhnasmxmashngdbyxasudsxcfganmslfydtabjhxklsjsd,
+// sdzgfhjaskd sfghvbn
 const razorpay = new Razorpay({
     key_id: 'rzp_test_RmdMvunFIzaQ6d',
     key_secret: 'Ai6rSepUG8YxM62GmDISEk9a',
