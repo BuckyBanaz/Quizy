@@ -63,6 +63,7 @@ const School = require("./Model/School.js");
 const TeacherContest = require("./Model/TeacherContest.js");
 const TeacherQuestion = require("./Model/TeacherQuestion.js");
 const crypto = require("crypto")
+const sendNotification = require("./services/notification_service.js")
 const Fingerprint = require("express-fingerprint");
 const mg = require("nodemailer-mailgun-transport");
 
@@ -71,7 +72,7 @@ dotenv.config();
 
 const secretKey = "credmantra";
 const fast2smsAPIKey = "kuM9ZYAPpRt0hFqVW71UbOxygli64dDrQzew3JLojN5HTfaIvskCR4bYSDAznIa6VxGmuq0ytT72LZ5f";
-// sdftsfdghbasuhsjfwjhnasmxmashngdbyxasudsxcfganmslfydtabjhxklsjsd,
+
 // sdzgfhjaskd sfghvbn
 const razorpay = new Razorpay({
     key_id: 'rzp_test_RmdMvunFIzaQ6d',
@@ -94,224 +95,65 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(Fingerprint());
 
-// Login needed Api Start
-// Genrate-Otp Api
-// app.post("/send-otp", async (req, res) => {
-//     const { phoneNumber } = req.body;
-//     const phoneRegex = /^\d{10}$/;
-//     if (!phoneRegex.test(phoneNumber)) {
-//         return res.status(400).json({ success: false, message: "Invalid phone number" });
-//     }
-//     const otp = otpGenerator.generate(4, {  
-//         lowerCaseAlphabets: false,
-//         upperCaseAlphabets: false,
-//         specialChars: false,
-//         number: true,
-//     });
-//     const otpExpiration = new Date(Date.now() + 5 * 60 * 1000);
-//     try {
-//         const updatedPhoneNumber = await PhoneNumber.findOneAndUpdate(
-//             { phoneNumber: phoneNumber },
-//             { otp: otp, otpExpiration: otpExpiration },
-//             { upsert: true, new: true, runValidators: true }
-//         );
-//         const fast2smsResponse = await axios.get("https://www.fast2sms.com/dev/bulkV2", {
-//             params: {
-//                 authorization: fast2smsAPIKey,
-//                 variables_values: otp,
-//                 route: "otp",
-//                 numbers: phoneNumber,
-//             },
-//         });
-//         console.log("Fast2SMS Response:", fast2smsResponse.data);
-//         res.json({
-//             success: true,
-//             updatedPhoneNumber,
-//             message: "OTP generated successfully",
-//             otp: `Dont share your Quizy code : ${otp} `,
-//         });
-//         console.log(otp);
-//     } catch (err) {
-//         console.error("Error generating OTP:", err);
-//         res.status(500).json({
-//             success: false,
-//             message: "Failed to generate OTP",
-//         });
-//     }
-// });
-
-// // verify-Otp
-// app.post("/verify-otp", async (req, res) => {
-//     const { phoneNumber, otp } = req.body;
-//     try {
-//         const phoneNumberData = await PhoneNumber.findOne({ phoneNumber });
-//         if (phoneNumberData && phoneNumberData.otp === otp && phoneNumberData.otpExpiration > Date.now()) {
-//             const token = jwt.sign({ phoneNumber }, secretKey, { expiresIn: "24h" });
-//             const userData = await CombineDetails.findOne({
-//                 $or: [
-//                     { "formDetails.phoneNumber": phoneNumber },
-//                     { "studentDetails.phoneNumber": phoneNumber },
-//                 ],
-//             });
-//             const user = userData ? {
-//                 _id: userData._id || null,
-//                 fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
-//                 address: userData.formDetails?.address || userData.studentDetails?.address || null,
-//                 email: userData.formDetails?.email || null,
-//                 city: userData.formDetails?.city || userData.studentDetails?.city || null,
-//                 role: userData.formDetails?.role || userData.studentDetails?.role || null,
-//                 state: userData.formDetails?.state || userData.studentDetails?.state || null,
-//                 pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
-//                 phoneNumber: phoneNumber,
-//                 dob: userData.formDetails?.dob || null,
-//                 // Additional fields from studentDetails
-//                 schoolName: userData.studentDetails?.schoolName || null,
-//                 schoolAddress: userData.studentDetails?.schoolAddress || null,
-//                 selectEducation: userData.studentDetails?.selectEducation || null,
-//                 boardOption: userData.studentDetails?.boardOption || null,
-//                 classvalue: userData.studentDetails?.classvalue || null,
-//                 mediumName: userData.studentDetails?.mediumName || null,
-//                 aadharcard: userData.studentDetails?.aadharcard || null,
-//             } : {
-//                 _id: null,
-//                 fullname: null,
-//                 address: null,
-//                 email: null,
-//                 city: null,
-//                 role: null,
-//                 state: null,
-//                 pincode: null,
-//                 phoneNumber: phoneNumber,
-//                 dob: null,
-//                 // Additional fields
-//                 schoolName: null,
-//                 schoolAddress: null,
-//                 selectEducation: null,
-//                 boardOption: null,
-//                 classvalue: null,
-//                 mediumName: null,
-//                 aadharcard: null,
-//             };
-//             res.json({
-//                 success: true,
-//                 message: "OTP verified successfully",
-//                 user: user,
-//                 token: token,
-//             });
-//         } else {
-//             res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
-//         }
-//     } catch (err) {
-//         console.error("Error verifying OTP:", err);
-//         res.status(500).json({ success: false, message: "Failed to verify OTP" });
-//     }
-// });
-
-// const transporter = nodemailer.createTransport(mg(mailgunAuth));
-
-
-
-// const mailgunAuth = {
-//     auth: {
-//         api_key: MailGunApiKey, // Aapka Mailgun API key
-//         domain: "yourdomain.com",
-//     },
-// };
-
-// app.post("/send-otp", async (req, res) => {
-//     try {
-//         const { email, referralCode } = req.body;
-
-//         if (!email) {
-//             return res.status(400).json({ success: false, message: "Email is required" });
-//         }
-
-//         const otp = Math.floor(1000 + Math.random() * 9000).toString();
-//         const otpExpiration = Date.now() + 5 * 60 * 1000; // 5 minutes validity
-
-//         // If referralCode is provided, find the referrer
-//         let referredBy = null;
-//         if (referralCode) {
-//             const referrer = await PhoneNumber.findOne({ referralCode });
-//             if (referrer) {
-//                 referredBy = { userId: referrer._id, fullname: referrer.fullname };
-//             }
-//         }
-
-//         await PhoneNumber.findOneAndUpdate(
-//             { email },
-//             { email, otp, otpExpiration, referredBy },
-//             { upsert: true, new: true }
-//         );
-
-//         const mailOptions = {
-//             from: process.env.GMAIL_USER,
-//             to: email,
-//             subject: "Your OTP Code",
-//             text: `Your OTP code is: ${otp}`,
-//         };
-
-//         await transporter.sendMail(mailOptions);
-
-//         res.json({ success: true, message: "OTP sent successfully" });
-//     } catch (error) {
-//         console.error("Error sending OTP:", error);
-//         res.status(500).json({ success: false, message: "Failed to send OTP" });
-//     }
-// });
-
-
-
-
-// ✅ **API 1: Website se referral track karna**
-app.get("/track-referral", async (req, res) => {
-    const { ref: referralCode } = req.query;
-    const deviceId = req.cookies.deviceId || req.fingerprint.hash;  // 🔹 Auto-detect device
-
-    if (!referralCode) {
-        return res.status(400).json({ message: "Missing referral code" });
-    }
-
-    try {
-        await Referral.findOneAndUpdate(
-            { deviceId },
-            { referralCode },
-            { upsert: true, new: true }
-        );
-
-        // 🔹 Store deviceId in cookies (for website tracking)
-        res.cookie("deviceId", deviceId, { maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true });
-
-        res.json({ message: "Referral stored successfully", deviceId });
-    } catch (error) {
-        console.error("Error storing referral:", error);
-        res.status(500).json({ message: "Internal Server Error" });
-    }
-});
-
-// ✅ **API 2: Mobile App se referral fetch karna**
-app.get("/get-referral", async (req, res) => {
-    const deviceId = req.fingerprint.hash;  // 🔹 Auto-detect device
-
-    try {
-        const referral = await Referral.findOne({ deviceId });
-
-        if (!referral) {
-            return res.status(404).json({ message: "No referral found" });
-        }
-
-        res.json({ referralCode: referral.referralCode });
-    } catch (error) {
-        console.error("Error retrieving referral:", error);
-        res.status(500).json({ message: "Internal Server Error" });
-    }
-});
 
 
 // Verify OTP
 
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: "goquizzytechnology@gmail.com",
+        pass: "nkez hine jrsj gtsh",
+    },
+});
+
+
+
+app.post("/send-otp", async (req, res) => {
+    try {
+        const { email, referralCode } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Email is required" });
+        }
+
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        const otpExpiration = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+
+        // Handle referral logic
+        let referredBy = null;
+        if (referralCode) {
+            const referrer = await PhoneNumber.findOne({ referralCode });
+            if (referrer) {
+                referredBy = { userId: referrer._id, fullname: referrer.fullname };
+            }
+        }
+
+        await PhoneNumber.findOneAndUpdate(
+            { email },
+            { $set: { email, otp, otpExpiration, referredBy } },
+            { upsert: true, new: true }
+        );
+
+        const mailOptions = {
+            from: process.env.GMAIL_USER,
+            to: email,
+            subject: "Your OTP Code",
+            text: `Your OTP code is: ${otp}`,
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.json({ success: true, message: "OTP sent successfully" });
+    } catch (error) {
+        console.error("Error sending OTP:", error);
+        res.status(500).json({ success: false, message: "Failed to send OTP" });
+    }
+})
+
+
 app.post("/verify-otp", async (req, res) => {
-    const { email, otp , pushToken } = req.body; // Now verifying by email instead of phoneNumber
+    const { email, otp, pushToken } = req.body; // Now verifying by email instead of phoneNumber
     try {
         const emailData = await PhoneNumber.findOne({ email }); // Check OTP against email
         if (!emailData || emailData.otp !== otp || emailData.otpExpiration <= Date.now()) {
@@ -319,7 +161,6 @@ app.post("/verify-otp", async (req, res) => {
         }
 
         const generateReferralCode = () => crypto.randomBytes(4).toString("hex").toUpperCase();
-
 
         let userData = await CombineDetails.findOne({
             $or: [
@@ -331,28 +172,29 @@ app.post("/verify-otp", async (req, res) => {
         let referralCode = userData?.formDetails?.referralCode || userData?.studentDetails?.referralCode || generateReferralCode();
 
         if (!userData) {
-
             userData = new CombineDetails({
                 formDetails: {
                     email,
                     referralCode,
                 },
-                studentDetails: {}
+                studentDetails: {},
+                pushToken: pushToken // ✅ Push token added for new users
             });
             await userData.save();
         } else {
-
             if (!userData.formDetails?.referralCode && !userData.studentDetails?.referralCode) {
                 if (!userData.formDetails) userData.formDetails = {};
                 userData.formDetails.referralCode = referralCode;
-                await userData.save();
             }
+
+            // ✅ Push token update karein agar already user exist karta hai
+            userData.pushToken = pushToken;
+            await userData.save();
         }
 
         // Generate JWT Token
         const token = jwt.sign({ email }, secretKey, { expiresIn: "24h" });
 
-        // Prepare user response
         // Prepare user response
         const user = {
             _id: userData._id || null,
@@ -377,6 +219,7 @@ app.post("/verify-otp", async (req, res) => {
                 userId: userData.formDetails?.referredBy?.userId || userData.studentDetails?.referredBy?.userId || null,
                 fullname: userData.formDetails?.referredBy?.fullname || userData.studentDetails?.referredBy?.fullname || null,
             },
+            pushToken: userData.pushToken // ✅ Push token added in response
         };
 
         res.json({
@@ -384,7 +227,6 @@ app.post("/verify-otp", async (req, res) => {
             message: "OTP verified successfully",
             user: user,
             token: token,
-            pushToken:combinedata.pushToken
         });
 
     } catch (err) {
@@ -392,36 +234,6 @@ app.post("/verify-otp", async (req, res) => {
         res.status(500).json({ success: false, message: "Failed to verify OTP" });
     }
 });
-
-
-//   app.post("/check-referral", async (req, res) => {
-//     try {
-//         const { referralCode } = req.body;
-
-//         if (!referralCode) {
-//             return res.status(400).json({ success: false, message: "Referral code is required" });
-//         }
-
-//         const referrer = await PhoneNumber.findOne({ referralCode });
-
-//         if (!referrer) {
-//             return res.status(404).json({ success: false, message: "Invalid referral code" });
-//         }
-
-//         res.json({
-//             success: true,
-//             message: "Referral code verified",
-//             referredBy: {
-//                 userId: referrer._id,
-//                 fullname: referrer.fullname || "Unknown"
-//             }
-//         });
-
-//     } catch (err) {
-//         console.error("Error checking referral:", err);
-//         res.status(500).json({ success: false, message: "Failed to check referral" });
-//     }
-// });
 
 
 app.post("/verify-refferralCode", async (req, res) => {
@@ -648,71 +460,95 @@ app.put("/forget/password", authhentication, async (req, res) => {
 
 
 //Other form Api
-app.post("/other/add", authhentication, async (req, res) => {
+
+
+app.post("/other/add", async (req, res) => {
     console.log("Incoming data:", req.body);
     try {
         let initialAmountForUser = 10;
         let referralBonusForUser = 10;
 
-        let referralCode;
-        let isUnique = false;
+        // Destructure request body
+        const { fullname, phoneNumber, dob, address, city, state, pincode, email, referralCode } = req.body;
 
+        if (!fullname || !phoneNumber || !dob || !address || !city || !state || !pincode || !email) {
+            return res.status(400).json({ success: false, message: "All fields are required" });
+        }
+
+        // Generate Unique Referral Code
+        let newReferralCode;
+        let isUnique = false;
         while (!isUnique) {
-            referralCode = otpGenerator.generate(8, {
+            newReferralCode = otpGenerator.generate(8, {
                 lowerCaseAlphabets: false,
                 upperCaseAlphabets: true,
                 specialChars: false,
-                number: true,
+                numbers: true,
             });
+
             const existingReferral = await CombineDetails.findOne({
                 $or: [
-                    { "formDetails.referralCode": referralCode },
-                    { "studentDetails.referralCode": referralCode },
+                    { "formDetails.referralCode": newReferralCode },
+                    { "studentDetails.referralCode": newReferralCode },
                 ],
             });
+
             if (!existingReferral) {
                 isUnique = true;
             }
         }
-        req.body.referralCode = referralCode;
 
-        if (req.body.email) {
-            const phoneNumberData = await PhoneNumber.findOne({ email: req.body.email });
-            if (phoneNumberData && phoneNumberData.referredBy) {
-                req.body.referredBy = phoneNumberData.referredBy;
+        // Check if User is Referred by Someone
+        let referredBy = null;
+        if (referralCode) {
+            const referrer = await CombineDetails.findOne({ "formDetails.referralCode": referralCode });
+            if (referrer) {
+                referredBy = { userId: referrer._id, fullname: referrer.formDetails.fullname };
             }
         }
 
-        const data = new CombineDetails({ formDetails: req.body });
-        const result = await data.save();
-        let wallet = await Wallet.findOne({ combineId: result._id });
-        if (!wallet) {
-            wallet = new Wallet({ combineId: result._id, balance: initialAmountForUser });
-            await logTransaction(result._id, initialAmountForUser, "credit", "Reward Money", "completed");
-        }
+        // Calculate Wallet Balance
+        let walletBalance = initialAmountForUser + (referredBy ? referralBonusForUser : 0);
 
-        // if (req.body.referredBy.userId != null && req.body.referredBy.userId != '' && req.body.referredBy.userId != undefined) {
-        //     if (wallet) {
-        //         wallet.referralBalance = (wallet.referralBalance || 0) + referralBonusForUser;
-        //         await logTransaction(result._id, referralBonusForUser, "credit", "Referral Bonus", "completed");
-        //     }
-        // }
+        // Update if email exists, otherwise create new entry
+        const updatedUser = await CombineDetails.findOneAndUpdate(
+            { "formDetails.email": email }, // Find user by email
+            {
+                $set: {
+                    "formDetails.fullname": fullname,
+                    "formDetails.phoneNumber": phoneNumber,
+                    "formDetails.dob": dob,
+                    "formDetails.address": address,
+                    "formDetails.city": city,
+                    "formDetails.state": state,
+                    "formDetails.pincode": pincode,
+                    "formDetails.referralCode": newReferralCode,
+                    "formDetails.referredBy": referredBy,
+                    "formDetails.walletBalance": walletBalance,
+                }
+            },
+            { new: true, upsert: true } // Update if found, otherwise insert new
+        );
 
-        // Wallet //
-        console.log(wallet);
-        await wallet.save();
-        console.log(result);
-        res.send({
-            userDetails: result,
-            walletBalance: wallet.balance,
+        res.json({
+            success: true,
+            message: updatedUser ? "User updated successfully" : "User added successfully",
+            userDetails: updatedUser,
         });
+
     } catch (error) {
         console.error("Error saving user details:", error);
-        res.status(500).send({
-            error: "User details already saved  or another error occurred",
+        res.status(500).json({
+            success: false,
+            message: "Error occurred while saving user details",
         });
     }
 });
+
+
+
+
+
 
 //  Student Form
 app.post("/student/add", authhentication, async (req, res) => {
@@ -4230,6 +4066,22 @@ app.get("/getShoppingPartners", authhentication, getShoppingPartner);
 app.use("/auth", authRoute);
 
 app.use("/company", ensureAuthenticated, companyRoutes);
+
+// notification Api 
+    
+app.post("/send-notification", async (req, res) => {
+    const { deviceToken, title, body, imageUrl } = req.body;
+    console.log(req.body)
+  
+    try {
+      const result = await sendNotification(deviceToken, title, body, imageUrl);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+
 
 // test Api 
 

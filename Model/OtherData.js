@@ -22,6 +22,7 @@ const formSchema = new mongoose.Schema({
     city: { type: String },
     state: { type: String },
     pincode: { type: String },
+    email:{type:String },
     referralCode: { type: String, unique: true },
     referredBy: {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "CombineData" },
@@ -32,7 +33,8 @@ const formSchema = new mongoose.Schema({
 const combineSchema = new mongoose.Schema({
     studentDetails: { type: studentSchema, default: null },
     formDetails: { type: formSchema, default: null },
-    score: { type: Number, default: 0 }
+    score: { type: Number, default: 0 },
+    pushToken:{ type :String}
 });
 
 const CombineDetails = mongoose.model("CombineData", combineSchema);
