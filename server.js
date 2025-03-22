@@ -172,24 +172,26 @@ app.post("/verify-otp", async (req, res) => {
         let referralCode = userData?.formDetails?.referralCode || userData?.studentDetails?.referralCode || generateReferralCode();
 
         if (!userData) {
+            // If the user does not exist, create a new entry
             userData = new CombineDetails({
                 formDetails: {
                     email,
                     referralCode,
                 },
                 studentDetails: {},
-                pushToken: pushToken // ✅ Push token added for new users
+                pushToken: pushToken // ✅ Add push token for new users
             });
             await userData.save();
         } else {
+            // If user exists, check and update the referral code and pushToken
             if (!userData.formDetails?.referralCode && !userData.studentDetails?.referralCode) {
                 if (!userData.formDetails) userData.formDetails = {};
                 userData.formDetails.referralCode = referralCode;
             }
 
-            // ✅ Push token update karein agar already user exist karta hai
+            // ✅ Update push token for existing users
             userData.pushToken = pushToken;
-            await userData.save();
+            await userData.save(); // Save the updated user data with the new pushToken
         }
 
         // Generate JWT Token
