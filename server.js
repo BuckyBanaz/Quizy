@@ -71,13 +71,181 @@ const app = express();
 dotenv.config();
 
 const secretKey = "credmantra";
-const fast2smsAPIKey = "kuM9ZYAPpRt0hFqVW71UbOxygli64dDrQzew3JLojN5HTfaIvskCR4bYSDAznIa6VxGmuq0ytT72LZ5f";
+const fast2smsAPIKey = "3DXLmG2Xk1Gs7IUmoEO2MPaxFLb0a4LAKWf480W10wmVXrZe3t9ahoakchZd";
 
 // sdzgfhjaskd sfghvbn
 const razorpay = new Razorpay({
     key_id: 'rzp_test_RmdMvunFIzaQ6d',
     key_secret: 'Ai6rSepUG8YxM62GmDISEk9a',
 });
+
+//
+app.use(cors());
+app.use(express.json());
+app.use(bodyParser.json());
+app.use(cookieParser());
+app.use(Fingerprint());
+
+
+
+// Verify OTP
+
+// const transporter = nodemailer.createTransport({
+//     service: "gmail",
+//     auth: {
+//         user: "goquizzytechnology@gmail.com",
+//         pass: "nkez hine jrsj gtsh",
+//     },
+// });
+
+
+
+// app.post("/send-otp", async (req, res) => {
+//     try {
+//         const { email, referralCode } = req.body;
+
+//         if (!email) {
+//             return res.status(400).json({ success: false, message: "Email is required" });
+//         }
+
+//         const otp = Math.floor(1000 + Math.random() * 9000).toString();
+//         const otpExpiration = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+
+//         // Handle referral logic
+//         let referredBy = null;
+//         if (referralCode) {
+//             const referrer = await PhoneNumber.findOne({ referralCode });
+//             if (referrer) {
+//                 referredBy = { userId: referrer._id, fullname: referrer.fullname };
+//             }
+//         }
+
+//         await PhoneNumber.findOneAndUpdate(
+//             { email },
+//             { $set: { email, otp, otpExpiration, referredBy } },
+//             { upsert: true, new: true }
+//         );
+
+//         const mailOptions = {
+//             from: process.env.GMAIL_USER,
+//             to: email,
+//             subject: "Your OTP Code",
+//             text: `Your OTP code is: ${otp}`,
+//         };
+
+//         await transporter.sendMail(mailOptions);
+
+//         res.json({ success: true, message: "OTP sent successfully" });
+//     } catch (error) {
+//         console.error("Error sending OTP:", error);
+//         res.status(500).json({ success: false, message: "Failed to send OTP" });
+//     }
+// })
+
+
+// app.post("/verify-otp", async (req, res) => {
+//     const { email, otp, pushToken } = req.body; 
+//     try {
+//         const emailData = await PhoneNumber.findOne({ email }); 
+//         if (!emailData || emailData.otp !== otp || emailData.otpExpiration <= Date.now()) {
+//             return res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
+//         }
+
+//         const generateReferralCode = () => crypto.randomBytes(4).toString("hex").toUpperCase();
+
+//         let userData = await CombineDetails.findOne({
+//             $or: [
+//                 { "formDetails.email": email },
+//                 { "studentDetails.email": email },
+//             ],
+//         });
+
+//         let referralCode = userData?.formDetails?.referralCode || userData?.studentDetails?.referralCode || generateReferralCode();
+
+//         if (!userData) {
+//             // If the user does not exist, create a new entry
+//             userData = new CombineDetails({
+//                 formDetails: {
+//                     email,
+//                     referralCode,
+//                 },
+//                 studentDetails: {},
+//                 pushToken: pushToken // ✅ Add push token for new users
+//             });
+//             await userData.save();
+//         } else {
+//             // If user exists, check and update the referral code and pushToken
+//             if (!userData.formDetails?.referralCode && !userData.studentDetails?.referralCode) {
+//                 if (!userData.formDetails) userData.formDetails = {};
+//                 userData.formDetails.referralCode = referralCode;
+//             }
+
+//             // ✅ Update push token for existing users
+//             userData.pushToken = pushToken;
+//             await userData.save(); // Save the updated user data with the new pushToken
+//         }
+
+//         // Generate JWT Token
+//         const token = jwt.sign({ email }, secretKey, { expiresIn: "24h" });
+
+//         // Prepare user response
+//         const user = {
+//             _id: userData._id || null,
+//             fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
+//             address: userData.formDetails?.address || userData.studentDetails?.address || null,
+//             email: email, // Now email is primary key
+//             city: userData.formDetails?.city || userData.studentDetails?.city || null,
+//             role: userData.formDetails?.role || userData.studentDetails?.role || null,
+//             state: userData.formDetails?.state || userData.studentDetails?.state || null,
+//             pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
+//             phoneNumber: userData.formDetails?.phoneNumber || userData.studentDetails?.phoneNumber || null,
+//             dob: userData.formDetails?.dob || null,
+//             schoolName: userData.studentDetails?.schoolName || null,
+//             schoolAddress: userData.studentDetails?.schoolAddress || null,
+//             selectEducation: userData.studentDetails?.selectEducation || null,
+//             boardOption: userData.studentDetails?.boardOption || null,
+//             classvalue: userData.studentDetails?.classvalue || null,
+//             mediumName: userData.studentDetails?.mediumName || null,
+//             aadharcard: userData.studentDetails?.aadharcard || null,
+//             referralCode: referralCode, // Show referral code
+//             referredBy: {
+//                 userId: userData.formDetails?.referredBy?.userId || userData.studentDetails?.referredBy?.userId || null,
+//                 fullname: userData.formDetails?.referredBy?.fullname || userData.studentDetails?.referredBy?.fullname || null,
+//             },
+//             pushToken: userData.pushToken // ✅ Push token added in response
+//         };
+
+//         res.json({
+//             success: true,
+//             message: "OTP verified successfully",
+//             user: user,
+//             token: token,
+//         });
+
+//     } catch (err) {
+//         console.error("Error verifying OTP:", err);
+//         res.status(500).json({ success: false, message: "Failed to verify OTP" });
+//     }
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // app.use(
 //     cors({
@@ -89,159 +257,119 @@ const razorpay = new Razorpay({
 //         credentials: true, // Allow cookies and authentication headers
 //     })
 // );
-app.use(cors());
-app.use(express.json());
-app.use(bodyParser.json());
-app.use(cookieParser());
-app.use(Fingerprint());
-
-
-
-// Verify OTP
-
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: "goquizzytechnology@gmail.com",
-        pass: "nkez hine jrsj gtsh",
-    },
-});
 
 
 
 app.post("/send-otp", async (req, res) => {
-    try {
-        const { email, referralCode } = req.body;
-
-        if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required" });
-        }
-
-        const otp = Math.floor(1000 + Math.random() * 9000).toString();
-        const otpExpiration = Date.now() + 5 * 60 * 1000; // 5 minutes validity
-
-        // Handle referral logic
-        let referredBy = null;
-        if (referralCode) {
-            const referrer = await PhoneNumber.findOne({ referralCode });
-            if (referrer) {
-                referredBy = { userId: referrer._id, fullname: referrer.fullname };
-            }
-        }
-
-        await PhoneNumber.findOneAndUpdate(
-            { email },
-            { $set: { email, otp, otpExpiration, referredBy } },
-            { upsert: true, new: true }
-        );
-
-        const mailOptions = {
-            from: process.env.GMAIL_USER,
-            to: email,
-            subject: "Your OTP Code",
-            text: `Your OTP code is: ${otp}`,
-        };
-
-        await transporter.sendMail(mailOptions);
-
-        res.json({ success: true, message: "OTP sent successfully" });
-    } catch (error) {
-        console.error("Error sending OTP:", error);
-        res.status(500).json({ success: false, message: "Failed to send OTP" });
+    const { phoneNumber } = req.body;
+    const phoneRegex = /^\d{10}$/;
+    if (!phoneRegex.test(phoneNumber)) {
+        return res.status(400).json({ success: false, message: "Invalid phone number" });
     }
-})
-
-
-app.post("/verify-otp", async (req, res) => {
-    const { email, otp, pushToken } = req.body; // Now verifying by email instead of phoneNumber
+    const otp = otpGenerator.generate(4, {  
+        lowerCaseAlphabets: false,
+        upperCaseAlphabets: false,
+        specialChars: false,
+        number: true,
+    });
+    const otpExpiration = new Date(Date.now() + 5 * 60 * 1000);
     try {
-        const emailData = await PhoneNumber.findOne({ email }); // Check OTP against email
-        if (!emailData || emailData.otp !== otp || emailData.otpExpiration <= Date.now()) {
-            return res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
-        }
-
-        const generateReferralCode = () => crypto.randomBytes(4).toString("hex").toUpperCase();
-
-        let userData = await CombineDetails.findOne({
-            $or: [
-                { "formDetails.email": email },
-                { "studentDetails.email": email },
-            ],
-        });
-
-        let referralCode = userData?.formDetails?.referralCode || userData?.studentDetails?.referralCode || generateReferralCode();
-
-        if (!userData) {
-            // If the user does not exist, create a new entry
-            userData = new CombineDetails({
-                formDetails: {
-                    email,
-                    referralCode,
-                },
-                studentDetails: {},
-                pushToken: pushToken // ✅ Add push token for new users
-            });
-            await userData.save();
-        } else {
-            // If user exists, check and update the referral code and pushToken
-            if (!userData.formDetails?.referralCode && !userData.studentDetails?.referralCode) {
-                if (!userData.formDetails) userData.formDetails = {};
-                userData.formDetails.referralCode = referralCode;
-            }
-
-            // ✅ Update push token for existing users
-            userData.pushToken = pushToken;
-            await userData.save(); // Save the updated user data with the new pushToken
-        }
-
-        // Generate JWT Token
-        const token = jwt.sign({ email }, secretKey, { expiresIn: "24h" });
-
-        // Prepare user response
-        const user = {
-            _id: userData._id || null,
-            fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
-            address: userData.formDetails?.address || userData.studentDetails?.address || null,
-            email: email, // Now email is primary key
-            city: userData.formDetails?.city || userData.studentDetails?.city || null,
-            role: userData.formDetails?.role || userData.studentDetails?.role || null,
-            state: userData.formDetails?.state || userData.studentDetails?.state || null,
-            pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
-            phoneNumber: userData.formDetails?.phoneNumber || userData.studentDetails?.phoneNumber || null,
-            dob: userData.formDetails?.dob || null,
-            schoolName: userData.studentDetails?.schoolName || null,
-            schoolAddress: userData.studentDetails?.schoolAddress || null,
-            selectEducation: userData.studentDetails?.selectEducation || null,
-            boardOption: userData.studentDetails?.boardOption || null,
-            classvalue: userData.studentDetails?.classvalue || null,
-            mediumName: userData.studentDetails?.mediumName || null,
-            aadharcard: userData.studentDetails?.aadharcard || null,
-            referralCode: referralCode, // Show referral code
-            referredBy: {
-                userId: userData.formDetails?.referredBy?.userId || userData.studentDetails?.referredBy?.userId || null,
-                fullname: userData.formDetails?.referredBy?.fullname || userData.studentDetails?.referredBy?.fullname || null,
+        const updatedPhoneNumber = await PhoneNumber.findOneAndUpdate(
+            { phoneNumber: phoneNumber },
+            { otp: otp, otpExpiration: otpExpiration },
+            { upsert: true, new: true, runValidators: true }
+        );
+        const fast2smsResponse = await axios.get("https://www.fast2sms.com/dev/bulkV2", {
+            params: {
+                authorization: fast2smsAPIKey,
+                variables_values: otp,
+                route: "otp",
+                numbers: phoneNumber,
             },
-            pushToken: userData.pushToken // ✅ Push token added in response
-        };
-
+        });
+        console.log("Fast2SMS Response:", fast2smsResponse.data);
         res.json({
             success: true,
-            message: "OTP verified successfully",
-            user: user,
-            token: token,
+            updatedPhoneNumber,
+            message: "OTP generated successfully",
+            otp: `Dont share your Quizy code : ${otp} `,
         });
+        console.log(otp);
+    } catch (err) {
+        console.error("Error generating OTP:", err);
+        res.status(500).json({
+            success: false,
+            message: "Failed to generate OTP",
+        });
+    }
+});
 
+// verify-Otp
+app.post("/verify-otp", async (req, res) => {
+    const { phoneNumber, otp } = req.body;
+    try {
+        const phoneNumberData = await PhoneNumber.findOne({ phoneNumber });
+        if (phoneNumberData && phoneNumberData.otp === otp && phoneNumberData.otpExpiration > Date.now()) {
+            const token = jwt.sign({ phoneNumber }, secretKey, { expiresIn: "24h" });
+            const userData = await CombineDetails.findOne({
+                $or: [
+                    { "formDetails.phoneNumber": phoneNumber },
+                    { "studentDetails.phoneNumber": phoneNumber },
+                ],
+            });
+            const user = userData ? {
+                _id: userData._id || null,
+                fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
+                address: userData.formDetails?.address || userData.studentDetails?.address || null,
+                email: userData.formDetails?.email || null,
+                city: userData.formDetails?.city || userData.studentDetails?.city || null,
+                role: userData.formDetails?.role || userData.studentDetails?.role || null,
+                state: userData.formDetails?.state || userData.studentDetails?.state || null,
+                pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
+                phoneNumber: phoneNumber,
+                dob: userData.formDetails?.dob || null,
+                // Additional fields from studentDetails
+                schoolName: userData.studentDetails?.schoolName || null,
+                schoolAddress: userData.studentDetails?.schoolAddress || null,
+                selectEducation: userData.studentDetails?.selectEducation || null,
+                boardOption: userData.studentDetails?.boardOption || null,
+                classvalue: userData.studentDetails?.classvalue || null,
+                mediumName: userData.studentDetails?.mediumName || null,
+                aadharcard: userData.studentDetails?.aadharcard || null,
+            } : {
+                _id: null,
+                fullname: null,
+                address: null,
+                email: null,
+                city: null,
+                role: null,
+                state: null,
+                pincode: null,
+                phoneNumber: phoneNumber,
+                dob: null,
+                // Additional fields
+                schoolName: null,
+                schoolAddress: null,
+                selectEducation: null,
+                boardOption: null,
+                classvalue: null,
+                mediumName: null,
+                aadharcard: null,
+            };
+            res.json({
+                success: true,
+                message: "OTP verified successfully",
+                user: user,
+                token: token,
+            });
+        } else {
+            res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
+        }
     } catch (err) {
         console.error("Error verifying OTP:", err);
         res.status(500).json({ success: false, message: "Failed to verify OTP" });
     }
 });
-
-
-
-// sfdjkxxldkfsdhbgjcfmcedhkfjcnidfjgmvvryudfjgvuijgvujmfgvhuefjgvuije
-// fguvjhkmdufgivjmrfuhjcnvmruhfjcmhugjfnvm uhgjnmhfmvbujfvghvnfujihnvufj
-// fyguhvjnfyudjcgvyfhnvfhjn
 
 app.post("/verify-refferralCode", async (req, res) => {
     try {
