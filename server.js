@@ -66,6 +66,7 @@ const crypto = require("crypto")
 const sendNotification = require("./services/notification_service.js")
 const Fingerprint = require("express-fingerprint");
 const mg = require("nodemailer-mailgun-transport");
+const bcrypt = require("bcryptjs");
 
 const app = express();
 dotenv.config();
@@ -260,116 +261,116 @@ app.use(Fingerprint());
 
 
 
-app.post("/send-otp", async (req, res) => {
-    const { phoneNumber } = req.body;
-    const phoneRegex = /^\d{10}$/;
-    if (!phoneRegex.test(phoneNumber)) {
-        return res.status(400).json({ success: false, message: "Invalid phone number" });
-    }
-    const otp = otpGenerator.generate(4, {  
-        lowerCaseAlphabets: false,
-        upperCaseAlphabets: false,
-        specialChars: false,
-        number: true,
-    });
-    const otpExpiration = new Date(Date.now() + 5 * 60 * 1000);
-    try {
-        const updatedPhoneNumber = await PhoneNumber.findOneAndUpdate(
-            { phoneNumber: phoneNumber },
-            { otp: otp, otpExpiration: otpExpiration },
-            { upsert: true, new: true, runValidators: true }
-        );
-        const fast2smsResponse = await axios.get("https://www.fast2sms.com/dev/bulkV2", {
-            params: {
-                authorization: fast2smsAPIKey,
-                variables_values: otp,
-                route: "otp",
-                numbers: phoneNumber,
-            },
-        });
-        console.log("Fast2SMS Response:", fast2smsResponse.data);
-        res.json({
-            success: true,
-            updatedPhoneNumber,
-            message: "OTP generated successfully",
-            otp: `Dont share your Quizy code : ${otp} `,
-        });
-        console.log(otp);
-    } catch (err) {
-        console.error("Error generating OTP:", err);
-        res.status(500).json({
-            success: false,
-            message: "Failed to generate OTP",
-        });
-    }
-});
+// app.post("/send-otp", async (req, res) => {
+//     const { phoneNumber } = req.body;
+//     const phoneRegex = /^\d{10}$/;
+//     if (!phoneRegex.test(phoneNumber)) {
+//         return res.status(400).json({ success: false, message: "Invalid phone number" });
+//     }
+//     const otp = otpGenerator.generate(4, {  
+//         lowerCaseAlphabets: false,
+//         upperCaseAlphabets: false,
+//         specialChars: false,
+//         number: true,
+//     });
+//     const otpExpiration = new Date(Date.now() + 5 * 60 * 1000);
+//     try {
+//         const updatedPhoneNumber = await PhoneNumber.findOneAndUpdate(
+//             { phoneNumber: phoneNumber },
+//             { otp: otp, otpExpiration: otpExpiration },
+//             { upsert: true, new: true, runValidators: true }
+//         );
+//         const fast2smsResponse = await axios.get("https://www.fast2sms.com/dev/bulkV2   ", {
+//             params: {
+//                 authorization: fast2smsAPIKey,
+//                 variables_values: otp,
+//                 route: "otp",
+//                 numbers: phoneNumber,
+//             },
+//         });
+//         console.log("Fast2SMS Response:", fast2smsResponse.data);
+//         res.json({
+//             success: true,
+//             updatedPhoneNumber,
+//             message: "OTP generated successfully",
+//             otp: `Dont share your Quizy code : ${otp} `,
+//         });
+//         console.log(otp);
+//     } catch (err) {
+//         console.error("Error generating OTP:", err);
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to generate OTP",
+//         });
+//     }
+// });
 
-// verify-Otp
-app.post("/verify-otp", async (req, res) => {
-    const { phoneNumber, otp } = req.body;
-    try {
-        const phoneNumberData = await PhoneNumber.findOne({ phoneNumber });
-        if (phoneNumberData && phoneNumberData.otp === otp && phoneNumberData.otpExpiration > Date.now()) {
-            const token = jwt.sign({ phoneNumber }, secretKey, { expiresIn: "24h" });
-            const userData = await CombineDetails.findOne({
-                $or: [
-                    { "formDetails.phoneNumber": phoneNumber },
-                    { "studentDetails.phoneNumber": phoneNumber },
-                ],
-            });
-            const user = userData ? {
-                _id: userData._id || null,
-                fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
-                address: userData.formDetails?.address || userData.studentDetails?.address || null,
-                email: userData.formDetails?.email || null,
-                city: userData.formDetails?.city || userData.studentDetails?.city || null,
-                role: userData.formDetails?.role || userData.studentDetails?.role || null,
-                state: userData.formDetails?.state || userData.studentDetails?.state || null,
-                pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
-                phoneNumber: phoneNumber,
-                dob: userData.formDetails?.dob || null,
-                // Additional fields from studentDetails
-                schoolName: userData.studentDetails?.schoolName || null,
-                schoolAddress: userData.studentDetails?.schoolAddress || null,
-                selectEducation: userData.studentDetails?.selectEducation || null,
-                boardOption: userData.studentDetails?.boardOption || null,
-                classvalue: userData.studentDetails?.classvalue || null,
-                mediumName: userData.studentDetails?.mediumName || null,
-                aadharcard: userData.studentDetails?.aadharcard || null,
-            } : {
-                _id: null,
-                fullname: null,
-                address: null,
-                email: null,
-                city: null,
-                role: null,
-                state: null,
-                pincode: null,
-                phoneNumber: phoneNumber,
-                dob: null,
-                // Additional fields
-                schoolName: null,
-                schoolAddress: null,
-                selectEducation: null,
-                boardOption: null,
-                classvalue: null,
-                mediumName: null,
-                aadharcard: null,
-            };
-            res.json({
-                success: true,
-                message: "OTP verified successfully",
-                user: user,
-                token: token,
-            });
-        } else {
-            res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
-        }
-    } catch (err) {
-        console.error("Error verifying OTP:", err);
-        res.status(500).json({ success: false, message: "Failed to verify OTP" });
-    }
-});
+// // verify-Otp
+// app.post("/verify-otp", async (req, res) => {
+//     const { phoneNumber, otp } = req.body;
+//     try {
+//         const phoneNumberData = await PhoneNumber.findOne({ phoneNumber });
+//         if (phoneNumberData && phoneNumberData.otp === otp && phoneNumberData.otpExpiration > Date.now()) {
+//             const token = jwt.sign({ phoneNumber }, secretKey, { expiresIn: "24h" });
+//             const userData = await CombineDetails.findOne({
+//                 $or: [
+//                     { "formDetails.phoneNumber": phoneNumber },
+//                     { "studentDetails.phoneNumber": phoneNumber },
+//                 ],
+//             });
+//             const user = userData ? {
+//                 _id: userData._id || null,
+//                 fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
+//                 address: userData.formDetails?.address || userData.studentDetails?.address || null,
+//                 email: userData.formDetails?.email || null,
+//                 city: userData.formDetails?.city || userData.studentDetails?.city || null,
+//                 role: userData.formDetails?.role || userData.studentDetails?.role || null,
+//                 state: userData.formDetails?.state || userData.studentDetails?.state || null,
+//                 pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
+//                 phoneNumber: phoneNumber,
+//                 dob: userData.formDetails?.dob || null,
+//                 // Additional fields from studentDetails
+//                 schoolName: userData.studentDetails?.schoolName || null,
+//                 schoolAddress: userData.studentDetails?.schoolAddress || null,
+//                 selectEducation: userData.studentDetails?.selectEducation || null,
+//                 boardOption: userData.studentDetails?.boardOption || null,
+//                 classvalue: userData.studentDetails?.classvalue || null,
+//                 mediumName: userData.studentDetails?.mediumName || null,
+//                 aadharcard: userData.studentDetails?.aadharcard || null,
+//             } : {
+//                 _id: null,
+//                 fullname: null,
+//                 address: null,
+//                 email: null,
+//                 city: null,
+//                 role: null,
+//                 state: null,
+//                 pincode: null,
+//                 phoneNumber: phoneNumber,
+//                 dob: null,
+//                 // Additional fields
+//                 schoolName: null,
+//                 schoolAddress: null,
+//                 selectEducation: null,
+//                 boardOption: null,
+//                 classvalue: null,
+//                 mediumName: null,
+//                 aadharcard: null,
+//             };
+//             res.json({
+//                 success: true,
+//                 message: "OTP verified successfully",
+//                 user: user,
+//                 token: token,
+//             });
+//         } else {
+//             res.status(400).json({ success: false, message: "Invalid OTP or OTP expired" });
+//         }
+//     } catch (err) {
+//         console.error("Error verifying OTP:", err);
+//         res.status(500).json({ success: false, message: "Failed to verify OTP" });
+//     }
+// });
 
 app.post("/verify-refferralCode", async (req, res) => {
     try {
@@ -4215,6 +4216,103 @@ app.post("/send-notification", async (req, res) => {
       res.status(500).json({ success: false, error: error.message });
     }
   });
+
+
+// Login Api
+
+app.post("/register", async (req, res) => {
+    try {
+        const { fullname, phoneNumber, email, password, referralCode } = req.body;
+
+        if (!fullname || !phoneNumber || !email || !password) {
+            return res.status(400).json({ message: "All fields are required" });
+        }
+
+        const existingUser = await PhoneNumber.findOne({ email });
+        if (existingUser) return res.status(400).json({ message: "Email already exists" });
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        let generatedReferralCode = referralCode || Math.random().toString(36).substr(2, 8).toUpperCase();
+        let existingReferral = await PhoneNumber.findOne({ referralCode: generatedReferralCode });
+
+        // Ensure referral code is unique
+        while (existingReferral) {
+            generatedReferralCode = Math.random().toString(36).substr(2, 8).toUpperCase();
+            existingReferral = await PhoneNumber.findOne({ referralCode: generatedReferralCode });
+        }
+
+        const newUser = new PhoneNumber({ fullname, phoneNumber, email, password: hashedPassword, referralCode: generatedReferralCode });
+        await newUser.save();
+
+        res.status(201).json({ message: "User registered successfully" });
+    } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ message: "Server error", error });
+    }
+});
+
+
+// Login API
+app.post("/login", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        console.log("1")
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required" });
+        }
+console.log("2")
+        const user = await PhoneNumber.findOne({ email });
+        console.log("3")
+        if (!user) return res.status(400).json({ message: "Invalid email or password" });
+        console.log("4")
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
+        console.log("4")
+        const token = jwt.sign({email }, secretKey, { expiresIn: "72h" });
+        console.log("4")
+        res.json({ message: "Login successful", token, user: { fullname: user.fullname, email: user.email, phoneNumber: user.phoneNumber } });
+        console.log("4")
+    } catch (error) {
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+
+
+
+
+app.post("/reset-password", async (req, res) => {
+    try {
+        const { email, newPassword } = req.body;
+
+        if (!email ||  !newPassword) {
+            return res.status(400).json({ message: "Email, phone number, and new password are required" });
+        }
+
+        const user = await PhoneNumber.findOne({ email });
+        if (!user) return res.status(400).json({ message: "User not found" });
+
+        // Hash the new password
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+
+        res.json({ message: "Password reset successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error });
+    }
+});
+
+
+
+
+
+
+
+
+
+
+
 
 
 
