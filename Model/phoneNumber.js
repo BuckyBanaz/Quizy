@@ -17,9 +17,7 @@ const   phoneNumberSchema= new mongoose.Schema({
     phoneNumber: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    referralCode: { type: String, unique: true, default: function () { return Math.random().toString(36).substr(2, 8).toUpperCase(); } },
-    resetToken: { type: String },
-    resetTokenExpiry: { type: Date }
+    referralCode: { type: String, unique: true, default: function () { return Math.random().toString(36).substr(2, 8).toUpperCase(); } }
 });
 
 
