@@ -4265,27 +4265,39 @@ app.post("/register", async (req, res) => {
 // Login API
 app.post("/login", async (req, res) => {
     try {
-        const { email, password } = req.body;
-        console.log("1")
+        const { email, password, pushToken } = req.body;  
         if (!email || !password) {
             return res.status(400).json({ message: "Email and password are required" });
         }
-console.log("2")
+
         const user = await PhoneNumberData.findOne({ email });
-        console.log("3")
         if (!user) return res.status(400).json({ message: "Invalid email or password" });
-        console.log("4")
+
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
-        console.log("4")
-        const token = jwt.sign({email }, secretKey, { expiresIn: "72h" });
-        console.log("4")
-        res.json({ message: "Login successful", token, user: { fullname: user.fullname, email: user.email, phoneNumber: user.phoneNumber } });
-        console.log("4")
+
+        if (pushToken) {
+            user.pushToken = pushToken;
+            await user.save(); 
+        }
+
+        const token = jwt.sign({ email }, secretKey, { expiresIn: "72h" });
+
+        res.json({ 
+            message: "Login successful", 
+            token, 
+            user: { 
+                fullname: user.fullname, 
+                email: user.email, 
+                phoneNumber: user.phoneNumber, 
+                pushToken: user.pushToken 
+            } 
+        });
     } catch (error) {
         res.status(500).json({ message: "Server error" });
     }
 });
+
 
 
 
