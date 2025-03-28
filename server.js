@@ -4234,9 +4234,9 @@ app.post("/register", async (req, res) => {
         const existingUser = await PhoneNumberData.findOne({ email });
         if (existingUser) return res.status(400).json({ message: "Email already exists" });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        let generatedReferralCode = referralCode || Math.random().toString(36).substr(2, 8).toUpperCase();
+ 
+        // **Auto Generate Unique Referral Code**
+        let generatedReferralCode = Math.random().toString(36).substr(2, 8).toUpperCase();
         let existingReferral = await PhoneNumberData.findOne({ referralCode: generatedReferralCode });
 
         while (existingReferral) {
@@ -4244,17 +4244,34 @@ app.post("/register", async (req, res) => {
             existingReferral = await PhoneNumberData.findOne({ referralCode: generatedReferralCode });
         }
 
-        const newUser = new PhoneNumberData({ fullname, email, password: hashedPassword, referralCode: generatedReferralCode });
-        await newUser.save();
-
-        res.status(201).json({ message: "User registered successfully" });
-    } catch (error) {
-        console.error("Error:", error);
-
-        if (error.code === 11000) {
-            return res.status(400).json({ message: "Duplicate entry detected", error });
+        // **Check if referred by someone**
+        let referredBy = null;
+        if (referralCode) {
+            const referrer = await PhoneNumberData.findOne({ referralCode });
+            if (referrer) {
+                referredBy = { userId: referrer._id, fullname: referrer.fullname };
+            }
         }
 
+        // **Create New User**
+        const newUser = new PhoneNumberData({
+            fullname,
+            email,
+            password ,
+            referralCode: generatedReferralCode,
+            referredBy,
+        });
+
+        await newUser.save();
+
+        res.status(201).json({ 
+            message: "User registered successfully", 
+            referralCode: generatedReferralCode, 
+            referredBy 
+        });
+
+    } catch (error) {
+        console.error("Error:", error);
         res.status(500).json({ message: "Server error", error });
     }
 });
@@ -4262,10 +4279,13 @@ app.post("/register", async (req, res) => {
 
 
 
+
 // Login API
 app.post("/login", async (req, res) => {
     try {
-        const { email, password, pushToken } = req.body;  
+        const { email, password, pushToken } = req.body;
+        console.log(req.body, "2");
+
         if (!email || !password) {
             return res.status(400).json({ message: "Email and password are required" });
         }
@@ -4273,31 +4293,81 @@ app.post("/login", async (req, res) => {
         const user = await PhoneNumberData.findOne({ email });
         if (!user) return res.status(400).json({ message: "Invalid email or password" });
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
 
-        if (pushToken) {
-            user.pushToken = pushToken;
-            await user.save(); 
+        if (password !== user.password) {
+            return res.status(400).json({ message: "Invalid email or password" });
         }
 
+
+        let userData = await CombineDetails.findOne({
+            $or: [
+                { "formDetails.email": email },
+                { "studentDetails.email": email },
+            ],
+        });
+
+        let referralCode = userData?.formDetails?.referralCode || 
+                           userData?.studentDetails?.referralCode || 
+                           crypto.randomBytes(4).toString("hex").toUpperCase();
+
+        if (!userData) {
+            // If user does not exist, create new entry
+            userData = new CombineDetails({
+                formDetails: {
+                    email,
+                    referralCode,
+                },
+                studentDetails: {},
+                pushToken: pushToken // ✅ Store pushToken for new users
+            });
+            await userData.save();
+        } else {
+            // ✅ Update push token for existing users
+            userData.pushToken = pushToken;
+            await userData.save();
+        }
+
+        // ✅ Generate JWT Token
         const token = jwt.sign({ email }, secretKey, { expiresIn: "72h" });
 
-        res.json({ 
-            message: "Login successful", 
-            token, 
-            user: { 
-                fullname: user.fullname, 
-                email: user.email, 
-                phoneNumber: user.phoneNumber, 
-                pushToken: user.pushToken 
-            } 
+        // ✅ Prepare user response with all details
+        const responseUser = {
+            _id: userData._id || null,
+            fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
+            address: userData.formDetails?.address || userData.studentDetails?.address || null,
+            email: email, // Email is the primary key
+            city: userData.formDetails?.city || userData.studentDetails?.city || null,
+            role: userData.formDetails?.role || userData.studentDetails?.role || null,
+            state: userData.formDetails?.state || userData.studentDetails?.state || null,
+            pincode: userData.formDetails?.pincode || userData.studentDetails?.pincode || null,
+            phoneNumber: userData.formDetails?.phoneNumber || userData.studentDetails?.phoneNumber || null,
+            dob: userData.formDetails?.dob || null,
+            schoolName: userData.studentDetails?.schoolName || null,
+            schoolAddress: userData.studentDetails?.schoolAddress || null,
+            selectEducation: userData.studentDetails?.selectEducation || null,
+            boardOption: userData.studentDetails?.boardOption || null,
+            classvalue: userData.studentDetails?.classvalue || null,
+            mediumName: userData.studentDetails?.mediumName || null,
+            aadharcard: userData.studentDetails?.aadharcard || null,
+            referralCode: referralCode, // ✅ Show referral code
+            referredBy: {
+                userId: userData.formDetails?.referredBy?.userId || userData.studentDetails?.referredBy?.userId || null,
+                fullname: userData.formDetails?.referredBy?.fullname || userData.studentDetails?.referredBy?.fullname || null,
+            },
+            pushToken: userData.pushToken // ✅ Push token included in response
+        };
+
+        res.json({
+            success: true,
+            message: "Login successful",
+            user: responseUser,
+            token: token,
         });
+
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({ message: "Server error", error });
     }
 });
-
 
 
 
