@@ -14,7 +14,7 @@ const mongoose = require("mongoose");
 
 const   phoneNumberSchema= new mongoose.Schema({
     fullname: { type: String, required: true },
-    phoneNumber: { type: String, required: true, unique: true },
+    phoneNumber: { type: String, required: true},
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     referralCode: { type: String, unique: true, default: function () { return Math.random().toString(36).substr(2, 8).toUpperCase(); } }
