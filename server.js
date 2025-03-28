@@ -29,7 +29,7 @@ const jwt = require("jsonwebtoken");
 PORT = process.env.PORT || 5000;
 const bodyParser = require("body-parser");
 const otpGenerator = require("otp-generator");
-const PhoneNumber = require("./Model/phoneNumber.js");
+const PhoneNumberData = require("./Model/phoneNumber.js");
 const passworddata = require("./Model/passwordData.js");
 const contestdetails = require("./Model/contest.js");
 const Question = require("./Model/Question.js");
@@ -67,6 +67,7 @@ const sendNotification = require("./services/notification_service.js")
 const Fingerprint = require("express-fingerprint");
 const mg = require("nodemailer-mailgun-transport");
 const bcrypt = require("bcryptjs");
+const phoneNumber = require("./Model/phoneNumber.js");
 
 const app = express();
 dotenv.config();
@@ -4222,35 +4223,43 @@ app.post("/send-notification", async (req, res) => {
 
 app.post("/register", async (req, res) => {
     try {
-        const { fullname, phoneNumber, email, password, referralCode } = req.body;
+        const { fullname, email, password, referralCode } = req.body;
 
-        if (!fullname || !phoneNumber || !email || !password) {
+        if (!fullname || !email || !password) {
             return res.status(400).json({ message: "All fields are required" });
         }
 
-        const existingUser = await PhoneNumber.findOne({ email });
+        console.log(req.body);
+
+        const existingUser = await PhoneNumberData.findOne({ email });
         if (existingUser) return res.status(400).json({ message: "Email already exists" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         let generatedReferralCode = referralCode || Math.random().toString(36).substr(2, 8).toUpperCase();
-        let existingReferral = await PhoneNumber.findOne({ referralCode: generatedReferralCode });
+        let existingReferral = await PhoneNumberData.findOne({ referralCode: generatedReferralCode });
 
-        // Ensure referral code is unique
         while (existingReferral) {
             generatedReferralCode = Math.random().toString(36).substr(2, 8).toUpperCase();
-            existingReferral = await PhoneNumber.findOne({ referralCode: generatedReferralCode });
+            existingReferral = await PhoneNumberData.findOne({ referralCode: generatedReferralCode });
         }
 
-        const newUser = new PhoneNumber({ fullname, phoneNumber, email, password: hashedPassword, referralCode: generatedReferralCode });
+        const newUser = new PhoneNumberData({ fullname, email, password: hashedPassword, referralCode: generatedReferralCode });
         await newUser.save();
 
         res.status(201).json({ message: "User registered successfully" });
     } catch (error) {
         console.error("Error:", error);
+
+        if (error.code === 11000) {
+            return res.status(400).json({ message: "Duplicate entry detected", error });
+        }
+
         res.status(500).json({ message: "Server error", error });
     }
 });
+
+
 
 
 // Login API
@@ -4262,7 +4271,7 @@ app.post("/login", async (req, res) => {
             return res.status(400).json({ message: "Email and password are required" });
         }
 console.log("2")
-        const user = await PhoneNumber.findOne({ email });
+        const user = await PhoneNumberData.findOne({ email });
         console.log("3")
         if (!user) return res.status(400).json({ message: "Invalid email or password" });
         console.log("4")
@@ -4290,7 +4299,7 @@ app.post("/reset-password", async (req, res) => {
             return res.status(400).json({ message: "Email, phone number, and new password are required" });
         }
 
-        const user = await PhoneNumber.findOne({ email });
+        const user = await PhoneNumberData.findOne({ email });
         if (!user) return res.status(400).json({ message: "User not found" });
 
         // Hash the new password
