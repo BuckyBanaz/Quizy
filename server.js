@@ -598,7 +598,6 @@ app.put("/forget/password", authhentication, async (req, res) => {
 
 //Other form Api
 
-
 app.post("/other/add", async (req, res) => {
     console.log("Incoming data:", req.body);
     try {                                                                                                                                              
@@ -637,7 +636,6 @@ app.post("/other/add", async (req, res) => {
             return res.status(500).json({ success: false, message: "Failed to generate a unique referral code. Try again." });
         }
 
-        // Check if User is Referred by Someone
         let referredBy = null;
         if (referralCode) {
             const referrer = await CombineDetails.findOne({ "formDetails.referralCode": referralCode });
@@ -646,10 +644,9 @@ app.post("/other/add", async (req, res) => {
             }
         }
 
-        // Calculate Wallet Balance
         let walletBalance = initialAmountForUser + (referredBy ? referralBonusForUser : 0);
 
-        // Update if email exists, otherwise create new entry
+
         const updatedUser = await CombineDetails.findOneAndUpdate(
             { "formDetails.email": email },
             {
@@ -669,6 +666,10 @@ app.post("/other/add", async (req, res) => {
             { new: true, upsert: true }
         );
 
+        if (!updatedUser) {
+            return res.status(500).json({ success: false, message: "User creation failed." });
+        }
+
         // Ensure Wallet is Created Automatically
         const existingWallet = await Wallet.findOne({ combineId: updatedUser._id });
 
@@ -677,13 +678,11 @@ app.post("/other/add", async (req, res) => {
                 combineId: updatedUser._id,
                 balance: walletBalance
             });
-        } else {
-            await Wallet.updateOne({ combineId: updatedUser._id }, { $set: { balance: walletBalance } });
         }
 
         res.json({
             success: true,
-            message: updatedUser ? "User updated successfully, wallet created/updated" : "User added successfully, wallet created",
+            message: "User added/updated successfully, wallet created",
             userDetails: updatedUser,
         });
 
@@ -698,82 +697,26 @@ app.post("/other/add", async (req, res) => {
 
 
 
-
-
 //  Student Form
-app.post("/student/add", authhentication, async (req, res) => {
+
+app.post("/student/add", async (req, res) => {
     try {
         console.log("Incoming data:", req.body);
-        const studentData = req.body;
-        validateStudentData(studentData);
-        let initialAmountForUser = 10;
-
-        let referralCode;
-        let isUnique = false;
-
-        while (!isUnique) {
-            referralCode = otpGenerator.generate(8, {
-                lowerCaseAlphabets: false,
-                upperCaseAlphabets: true,
-                specialChars: false,
-                number: true,
+        
+        // Check if required fields are present
+        if (!req.body.selectEducation || !req.body.role) {
+            return res.status(400).json({
+                success: false,
+                message: "selectEducation and role fields are required",
             });
-            const existingReferral = await CombineDetails.findOne({
-                $or: [
-                    { "formDetails.referralCode": referralCode },
-                    { "studentDetails.referralCode": referralCode },
-                ],
-            });
-            if (!existingReferral) {
-                isUnique = true;
-            }
-        }
-        req.body.referralCode = referralCode;
-
-        if (req.body.email) {
-            const phoneNumberData = await PhoneNumber.findOne({ email: req.body.email });
-            if (phoneNumberData && phoneNumberData.referredBy) {
-                req.body.referredBy = phoneNumberData.referredBy;
-            }
         }
 
-        const studentdata = new CombineDetails({ studentDetails: studentData });
-        const studentResult = await studentdata.save();
-        console.log("Student-Result:", studentResult);
-        let wallet = await Wallet.findOne({ combineId: studentResult._id });
-        if (!wallet) {
-            wallet = new Wallet({ combineId: studentResult._id, balance: initialAmountForUser });
-            await logTransaction(studentResult._id, initialAmountForUser, "credit", "Reward Money", "completed");
-        }
+        validateStudentData(req.body);  // Call validation function
 
-        // if (req.body.referredBy.userId != null && req.body.referredBy.userId != '' && req.body.referredBy.userId != undefined) {
-        //     if (wallet) {
-        //         wallet.referralBalance = (wallet.referralBalance || 0) + referralBonusForUser;
-        //         await logTransaction(studentResult._id, referralBonusForUser, "credit", "Referral Bonus", "completed");
-        //     }
-        // }
-
-        await wallet.save();
-        console.log("Saved Wallet:", wallet);
-        res.send({
-            studentDetails: studentResult,
-            walletBalance: wallet.balance,
-        });
-    } catch (error) {
-        console.log("Error:", error);
-        res.status(500).json({ message: "Internal error" });
-    }
-});
-
-
-
-app.post("/student/add",  async (req, res) => {
-    try {
-        console.log("Incoming data:", req.body);
-        const studentData = req.body;
-        validateStudentData(studentData);
         let initialAmountForUser = 10;
+        let referralBonus = 50;
 
+        // Generate Unique Referral Code
         let referralCode;
         let isUnique = false;
         while (!isUnique) {
@@ -796,56 +739,59 @@ app.post("/student/add",  async (req, res) => {
         }
         req.body.referralCode = referralCode;
 
-
+        // Check if the user was referred
         if (req.body.email) {
-            const phoneNumberData = await PhoneNumber.findOne({ email: req.body.email });
+            const phoneNumberData = await phoneNumber.findOne({ email: req.body.email });
             if (phoneNumberData && phoneNumberData.referredBy) {
                 req.body.referredBy = phoneNumberData.referredBy;
             }
         }
 
-
-        const studentdata = new CombineDetails({ studentDetails: studentData });
-        const studentResult = await studentdata.save();
+        // Save student details
+        const studentDataEntry = new CombineDetails({ studentDetails: req.body });
+        const studentResult = await studentDataEntry.save();
         console.log("Student-Result:", studentResult);
 
-
+        // Create or update the user's wallet
         let wallet = await Wallet.findOne({ combineId: studentResult._id });
         if (!wallet) {
-            wallet = new Wallet({ 
-                combineId: studentResult._id, 
-                balance: initialAmountForUser, 
-                referralBalance: 0 
+            wallet = new Wallet({
+                combineId: studentResult._id,
+                balance: initialAmountForUser,
+                referralBalance: 0,
             });
+            await wallet.save();
             await logTransaction(studentResult._id, initialAmountForUser, "credit", "Reward Money", "completed");
         }
 
-
+        // If referred by someone, update referral wallet
         if (req.body.referredBy?.userId) {
             let referrerWallet = await Wallet.findOne({ combineId: req.body.referredBy.userId });
             if (!referrerWallet) {
-                referrerWallet = new Wallet({ 
-                    combineId: req.body.referredBy.userId, 
-                    balance: 0, 
-                    referralBalance: 50
+                referrerWallet = new Wallet({
+                    combineId: req.body.referredBy.userId,
+                    balance: 0,
+                    referralBalance: referralBonus,
                 });
             } else {
-                referrerWallet.referralBalance = (referrerWallet.referralBalance || 0) + 50;
+                referrerWallet.referralBalance = (referrerWallet.referralBalance || 0) + referralBonus;
             }
-            await logTransaction(req.body.referredBy.userId, 50, "credit", "Referral Bonus", "completed");
             await referrerWallet.save();
+            await logTransaction(req.body.referredBy.userId, referralBonus, "credit", "Referral Bonus", "completed");
         }
 
-        await wallet.save();
-        console.log("Saved Wallet:", wallet);
+        console.log("Wallet Created:", wallet);
 
-        res.send({
+        res.json({
+            success: true,
+            message: "Student added successfully, wallet created/updated",
             studentDetails: studentResult,
             walletBalance: wallet.balance,
         });
+
     } catch (error) {
-        console.log("Error:", error);
-        res.status(500).json({ message: "Internal error" });
+        console.error("Error:", error);
+        res.status(500).json({ success: false, message: "Internal server error" });
     }
 });
 
