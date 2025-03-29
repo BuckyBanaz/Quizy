@@ -601,11 +601,10 @@ app.put("/forget/password", authhentication, async (req, res) => {
 
 app.post("/other/add", async (req, res) => {
     console.log("Incoming data:", req.body);
-    try {
+    try {                                                                                                                                              
         let initialAmountForUser = 10;
         let referralBonusForUser = 10;
 
-        // Destructure request body
         const { fullname, phoneNumber, dob, address, city, state, pincode, email, referralCode } = req.body;
 
         if (!fullname || !phoneNumber || !dob || !address || !city || !state || !pincode || !email) {
@@ -615,13 +614,11 @@ app.post("/other/add", async (req, res) => {
         // Generate Unique Referral Code
         let newReferralCode;
         let isUnique = false;
-        while (!isUnique) {
-            newReferralCode = otpGenerator.generate(8, {
-                lowerCaseAlphabets: false,
-                upperCaseAlphabets: true,
-                specialChars: false,
-                numbers: true,
-            });
+        let retryCount = 0;
+        const maxRetries = 10;
+
+        while (!isUnique && retryCount < maxRetries) {
+            newReferralCode = otpGenerator.generate(8, { lowerCaseAlphabets: false, upperCaseAlphabets: true, specialChars: false, numbers: true });
 
             const existingReferral = await CombineDetails.findOne({
                 $or: [
@@ -633,6 +630,11 @@ app.post("/other/add", async (req, res) => {
             if (!existingReferral) {
                 isUnique = true;
             }
+            retryCount++;
+        }
+
+        if (!isUnique) {
+            return res.status(500).json({ success: false, message: "Failed to generate a unique referral code. Try again." });
         }
 
         // Check if User is Referred by Someone
@@ -649,7 +651,7 @@ app.post("/other/add", async (req, res) => {
 
         // Update if email exists, otherwise create new entry
         const updatedUser = await CombineDetails.findOneAndUpdate(
-            { "formDetails.email": email }, // Find user by email
+            { "formDetails.email": email },
             {
                 $set: {
                     "formDetails.fullname": fullname,
@@ -664,12 +666,24 @@ app.post("/other/add", async (req, res) => {
                     "formDetails.walletBalance": walletBalance,
                 }
             },
-            { new: true, upsert: true } // Update if found, otherwise insert new
+            { new: true, upsert: true }
         );
+
+        // Ensure Wallet is Created Automatically
+        const existingWallet = await Wallet.findOne({ combineId: updatedUser._id });
+
+        if (!existingWallet) {
+            await Wallet.create({
+                combineId: updatedUser._id,
+                balance: walletBalance
+            });
+        } else {
+            await Wallet.updateOne({ combineId: updatedUser._id }, { $set: { balance: walletBalance } });
+        }
 
         res.json({
             success: true,
-            message: updatedUser ? "User updated successfully" : "User added successfully",
+            message: updatedUser ? "User updated successfully, wallet created/updated" : "User added successfully, wallet created",
             userDetails: updatedUser,
         });
 
@@ -681,7 +695,6 @@ app.post("/other/add", async (req, res) => {
         });
     }
 });
-
 
 
 
@@ -751,6 +764,93 @@ app.post("/student/add", authhentication, async (req, res) => {
         res.status(500).json({ message: "Internal error" });
     }
 });
+
+
+
+app.post("/student/add",  async (req, res) => {
+    try {
+        console.log("Incoming data:", req.body);
+        const studentData = req.body;
+        validateStudentData(studentData);
+        let initialAmountForUser = 10;
+
+        let referralCode;
+        let isUnique = false;
+        while (!isUnique) {
+            referralCode = otpGenerator.generate(8, {
+                lowerCaseAlphabets: false,
+                upperCaseAlphabets: true,
+                specialChars: false,
+                number: true,
+            });
+
+            const existingReferral = await CombineDetails.findOne({
+                $or: [
+                    { "formDetails.referralCode": referralCode },
+                    { "studentDetails.referralCode": referralCode },
+                ],
+            });
+            if (!existingReferral) {
+                isUnique = true;
+            }
+        }
+        req.body.referralCode = referralCode;
+
+
+        if (req.body.email) {
+            const phoneNumberData = await PhoneNumber.findOne({ email: req.body.email });
+            if (phoneNumberData && phoneNumberData.referredBy) {
+                req.body.referredBy = phoneNumberData.referredBy;
+            }
+        }
+
+
+        const studentdata = new CombineDetails({ studentDetails: studentData });
+        const studentResult = await studentdata.save();
+        console.log("Student-Result:", studentResult);
+
+
+        let wallet = await Wallet.findOne({ combineId: studentResult._id });
+        if (!wallet) {
+            wallet = new Wallet({ 
+                combineId: studentResult._id, 
+                balance: initialAmountForUser, 
+                referralBalance: 0 
+            });
+            await logTransaction(studentResult._id, initialAmountForUser, "credit", "Reward Money", "completed");
+        }
+
+
+        if (req.body.referredBy?.userId) {
+            let referrerWallet = await Wallet.findOne({ combineId: req.body.referredBy.userId });
+            if (!referrerWallet) {
+                referrerWallet = new Wallet({ 
+                    combineId: req.body.referredBy.userId, 
+                    balance: 0, 
+                    referralBalance: 50
+                });
+            } else {
+                referrerWallet.referralBalance = (referrerWallet.referralBalance || 0) + 50;
+            }
+            await logTransaction(req.body.referredBy.userId, 50, "credit", "Referral Bonus", "completed");
+            await referrerWallet.save();
+        }
+
+        await wallet.save();
+        console.log("Saved Wallet:", wallet);
+
+        res.send({
+            studentDetails: studentResult,
+            walletBalance: wallet.balance,
+        });
+    } catch (error) {
+        console.log("Error:", error);
+        res.status(500).json({ message: "Internal error" });
+    }
+});
+
+
+
 
 // Form Student or other End
 //create contest 
@@ -2088,7 +2188,7 @@ app.post("/wallet/add", authhentication, async (req, res) => {
     res.json({ balance: wallet.balance });
 });
 
-app.get("/getAmount", authhentication, async (req, res) => {
+app.get("/getAmount",  async (req, res) => {
     const { combineId } = req.query;
 
     try {
