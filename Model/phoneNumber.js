@@ -13,17 +13,16 @@ const mongoose = require("mongoose");
 
 
 const phoneNumberSchema = new mongoose.Schema({
-    fullname: { type: String, required: true },
+    fullname: { type: String,  },
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    referralCode: { type: String, required: true, unique: true }, // Unique referral code
+    password: { type: String,  },
+    referralCode: { type: String, unique: true }, // Unique referral code
     referredBy: { 
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "CombineData", default: null },
         fullname: { type: String, default: null }
     },
-    pushToken: { type: String, default: null } // Add pushToken field
+    pushToken: { type: String, default: null } 
 });
 
 
-// Export Model
 module.exports = mongoose.model("PhoneNumber", phoneNumberSchema);
