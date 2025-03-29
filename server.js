@@ -4290,15 +4290,19 @@ app.post("/login", async (req, res) => {
             return res.status(400).json({ message: "Email and password are required" });
         }
 
-        const user = await PhoneNumberData.findOne({ email });
-        if (!user) return res.status(400).json({ message: "Invalid email or password" });
+        let user = await PhoneNumberData.findOne({ email });
 
-
-        if (password !== user.password) {
-            return res.status(400).json({ message: "Invalid email or password" });
+        if (!user) {
+            const newUser = new PhoneNumberData({ email, password });
+            await newUser.save();
+        } else {
+         
+            if (password !== user.password) {
+                return res.status(400).json({ message: "Invalid email or password" });
+            }
         }
 
-
+       
         let userData = await CombineDetails.findOne({
             $or: [
                 { "formDetails.email": email },
@@ -4306,31 +4310,30 @@ app.post("/login", async (req, res) => {
             ],
         });
 
+        
         let referralCode = userData?.formDetails?.referralCode || 
                            userData?.studentDetails?.referralCode || 
                            crypto.randomBytes(4).toString("hex").toUpperCase();
 
         if (!userData) {
-            // If user does not exist, create new entry
+        
             userData = new CombineDetails({
                 formDetails: {
                     email,
                     referralCode,
                 },
                 studentDetails: {},
-                pushToken: pushToken // ✅ Store pushToken for new users
+                pushToken: pushToken 
             });
             await userData.save();
         } else {
-            // ✅ Update push token for existing users
             userData.pushToken = pushToken;
             await userData.save();
         }
 
-        // ✅ Generate JWT Token
         const token = jwt.sign({ email }, secretKey, { expiresIn: "72h" });
 
-        // ✅ Prepare user response with all details
+
         const responseUser = {
             _id: userData._id || null,
             fullname: userData.formDetails?.fullname || userData.studentDetails?.fullname || null,
@@ -4349,17 +4352,18 @@ app.post("/login", async (req, res) => {
             classvalue: userData.studentDetails?.classvalue || null,
             mediumName: userData.studentDetails?.mediumName || null,
             aadharcard: userData.studentDetails?.aadharcard || null,
-            referralCode: referralCode, // ✅ Show referral code
+           
+            pushToken: userData.pushToken,
+            referralCode: referralCode, 
             referredBy: {
                 userId: userData.formDetails?.referredBy?.userId || userData.studentDetails?.referredBy?.userId || null,
                 fullname: userData.formDetails?.referredBy?.fullname || userData.studentDetails?.referredBy?.fullname || null,
             },
-            pushToken: userData.pushToken // ✅ Push token included in response
         };
 
         res.json({
             success: true,
-            message: "Login successful",
+            message: user ? "Login successful" : "New user created and logged in",
             user: responseUser,
             token: token,
         });
@@ -4368,6 +4372,7 @@ app.post("/login", async (req, res) => {
         res.status(500).json({ message: "Server error", error });
     }
 });
+
 
 
 
