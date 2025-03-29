@@ -598,7 +598,7 @@ app.put("/forget/password", authhentication, async (req, res) => {
 
 //Other form Api
 
-app.post("/other/add", async (req, res) => {
+app.post("/other/add",authhentication, async (req, res) => {
     console.log("Incoming data:", req.body);
     try {                                                                                                                                              
         let initialAmountForUser = 10;
@@ -699,7 +699,7 @@ app.post("/other/add", async (req, res) => {
 
 //  Student Form
 
-app.post("/student/add", async (req, res) => {
+app.post("/student/add",authhentication, async (req, res) => {
     try {
         console.log("Incoming data:", req.body);
         
