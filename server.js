@@ -81,10 +81,24 @@ const razorpay = new Razorpay({
     key_secret: 'Ai6rSepUG8YxM62GmDISEk9a',
 });
 
-//
+
+
+const allowedOrigins = [
+    "http://localhost:5173",          
+    "https://www.goquizzy.com",       
+  ];
+
 app.use(cors({
-    origin: "http://localhost:5173", 
-    credentials: true 
+    origin: function (origin, callback) {
+     
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
   }));
 app.use(express.json());
 app.use(bodyParser.json());
