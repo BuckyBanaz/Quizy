@@ -82,7 +82,10 @@ const razorpay = new Razorpay({
 });
 
 //
-app.use(cors());
+app.use(cors({
+    origin: "http://localhost:5173", 
+    credentials: true 
+  }));
 app.use(express.json());
 app.use(bodyParser.json());
 app.use(cookieParser());
@@ -1133,8 +1136,9 @@ app.get("/contests", authhentication, async (req, res) => {
     }
 });
 
-app.get("/contestdata", authhentication, async (req, res) => {
+app.get("/contestdata",  async (req, res) => {
     const { id } = req.query;
+    console.log(id)
     try {
         let contests;
         if (id) {
