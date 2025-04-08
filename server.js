@@ -82,26 +82,14 @@ const razorpay = new Razorpay({
 });
 
 
-const allowedOrigins = [
-  "http://localhost:3000",              // Localhost dev
-  "https://www.goquizzy.com",           // Your production frontend
-];
-
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-}));
-
-
+    origin: ["https://www.goquizzy.com", "http://localhost:5173"],
+    credentials: true
+  }));
+  
+app.use(cookieParser());
 app.use(express.json());
 app.use(bodyParser.json());
-app.use(cookieParser());
 app.use(Fingerprint());
 
 

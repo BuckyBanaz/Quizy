@@ -3,8 +3,8 @@ const { getUser } = require("../services/auth");
 const ensureAuthenticated = (req, res, next) => {
     const auth = req.cookies?.userToken;
     if (!auth) return res.status(403).json({ message: "Unauthorized, JWT token is required" });
-    
-    try{
+
+    try {
         const decoded = getUser(auth);
         if (!decoded) return res.status(403).json({ message: "Unauthorized, JWT token is wrong" });
         req.user = decoded;
@@ -12,7 +12,8 @@ const ensureAuthenticated = (req, res, next) => {
     } catch (error) {
         return res.status(403).json({ message: "Unauthorized, JWT token is wrong or expired" });
     }
-}
+};
+
 
 module.exports = {
     ensureAuthenticated,
