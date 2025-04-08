@@ -82,8 +82,15 @@ const razorpay = new Razorpay({
 });
 
 
-app.use(cors({
-    origin: ["https://www.goquizzy.com", "http://localhost:5173"],
+const allowedOrigins = [
+    "http://localhost:5000",
+    "http://127.0.0.1:3000",
+    "https://www.goquizzy.com",
+    "https://goquizzy.com"
+  ];
+  
+  app.use(cors({
+    origin: allowedOrigins,
     credentials: true
   }));
   
@@ -4470,6 +4477,11 @@ app.get("/address", async (req, res) => {
     res.json("api Start, Razorpay gateway added");
 })
 
+
+app.get('/token', (req, res) => {
+    console.log("Cookies received:", req.cookies);
+    res.json({ cookies: req.cookies });
+  });
 
 
 app.listen(PORT, () => {
