@@ -82,7 +82,7 @@ const razorpay = new Razorpay({
 });
 
 
-const allowedOrigins = ["http://localhost:5173", "https://goquizzy.com"];
+const allowedOrigins = ["http://localhost:5173", "https://www.goquizzy.com/"];
 
 app.use(cors({
   origin: function (origin, callback) {
