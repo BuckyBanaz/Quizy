@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const secretKey = "credmantra"
 const option = {
-    expiresIn: "900h"
+    expiresIn: "900000000000000000h"
 }
 const authenticate = (req, res, next) => {
     const authtoken = req.header("authorization")
